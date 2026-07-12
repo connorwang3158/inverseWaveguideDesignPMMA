@@ -4,6 +4,11 @@ Grouped by which part of the codebase they anchor. **Verify every DOI/page numbe
 against the publisher site before manuscript submission** — entries marked (†) are
 foundational references cited from standard knowledge and must be double-checked.
 
+**Provenance note:** Group A intentionally overlaps Paper 1's bibliography — the
+analytic engine implements Paper 1's physics, so it inherits those anchors.
+Groups B–E are independent of Paper 1. Group D is the rigorous electromagnetic
+canon (verified against publisher listings) and carries the paper's L2 claims.
+
 ## A. Physics formulas in `waveguide_physics.py`
 
 1. Watson, A. B. (2013). A formula for the mean human optical modulation transfer
@@ -57,22 +62,41 @@ foundational references cited from standard knowledge and must be double-checked
     reality displays. *Light: Science & Applications*, 14, 94.
     https://doi.org/10.1038/s41377-025-01761-w
 
-## D. Rigorous solvers in `rigorous_solver.py`
+## D. Rigorous electromagnetic canon in `rigorous_solver.py` (VERIFIED)
 
 18. Moharam, M. G., & Gaylord, T. K. (1981). Rigorous coupled-wave analysis of
-    planar-grating diffraction. *JOSA*, 71(7), 811–818. (†) — RCWA itself.
-19. Li, L. (1996). Use of Fourier series in the analysis of discontinuous
-    periodic structures. *JOSA A*, 13(9), 1870–1876. (†) — factorization rules
-    RCWA implementations rely on.
-20. grcwa — autograd-capable RCWA (W. Jin). Docs: https://grcwa.readthedocs.io ;
+    planar-grating diffraction. *JOSA*, 71(7), 811–818. (†) — RCWA's origin.
+19. Moharam, M. G., Grann, E. B., Pommet, D. A., & Gaylord, T. K. (1995).
+    Formulation for stable and efficient implementation of the rigorous
+    coupled-wave analysis of binary gratings. *JOSA A*, 12(5), 1068–1076.
+    — VERIFIED — the formulation modern RCWA codes (incl. grcwa) implement.
+20. Moharam, M. G., Pommet, D. A., Grann, E. B., & Gaylord, T. K. (1995).
+    Stable implementation of the rigorous coupled-wave analysis for
+    surface-relief gratings: enhanced transmittance matrix approach.
+    *JOSA A*, 12(5), 1077–1086.
+    https://opg.optica.org/josaa/abstract.cfm?uri=josaa-12-5-1077 — VERIFIED.
+21. Pommet, D. A., Moharam, M. G., & Grann, E. B. (1994). Limits of scalar
+    diffraction theory for diffractive phase elements. *JOSA A*, 11(6),
+    1827–1834. https://opg.optica.org/josaa/abstract.cfm?uri=josaa-11-6-1827
+    — VERIFIED — proves scalar theory errs >±5% when feature size < 14λ; AR
+    coupler gratings sit at ~1λ, mandating the vectorial treatment. THIS is
+    the citation that justifies rigorous_solver.py's existence and explains
+    the ~50% scalar-vs-RCWA discrepancy found in rcwa_validation.csv.
+22. Li, L. (1996). Use of Fourier series in the analysis of discontinuous
+    periodic structures. *JOSA A*, 13(9), 1870–1876. (†) — factorization rules.
+23. grcwa — autograd-capable RCWA (W. Jin). Docs: https://grcwa.readthedocs.io ;
     source: https://github.com/weiliangjinca/grcwa — the solver wrapped here.
-21. Kim, C., & Lee, B. (2023). TORCWA: GPU-accelerated Fourier modal method and
+24. Kim, C., & Lee, B. (2023). TORCWA: GPU-accelerated Fourier modal method and
     gradient-based optimization for metasurface design. *Computer Physics
     Communications*, 282, 108552.
     https://www.sciencedirect.com/science/article/abs/pii/S0010465522002715
-22. Oskooi, A. F., et al. (2010). Meep: A flexible free-software package for
+    — VERIFIED — GPU alternative.
+25. Meent: differentiable electromagnetic simulator for machine learning.
+    arXiv:2406.12904. https://arxiv.org/pdf/2406.12904 — differentiable-RCWA
+    option for future in-loop training.
+26. Oskooi, A. F., et al. (2010). Meep: A flexible free-software package for
     electromagnetic simulations by the FDTD method. *Computer Physics
-    Communications*, 181, 687–702. (†) — FDTD option for non-periodic shapes.
+    Communications*, 181, 687–702. (†) — FDTD for non-periodic shapes.
 
 ## E. Architecture models in `architectures.py`
 
