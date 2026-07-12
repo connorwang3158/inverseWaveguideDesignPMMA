@@ -49,11 +49,16 @@ def make_dataset(n: int, seed: int = 0):
     return theta, y
 
 
-def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False):
+def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
+          seed=0):
     if quick:
         n_train, n_val, epochs = 6000, 1000, 8
 
-    torch.manual_seed(0)
+    steps_per_epoch = (n_train + batch - 1) // batch
+    print(f"config: {n_train} samples | {epochs} epochs | batch {batch} | "
+          f"lr {lr} | seed {seed} -> {steps_per_epoch * epochs:,} iterations")
+
+    torch.manual_seed(seed)
     theta_tr, y_tr = make_dataset(n_train, seed=1)
     theta_va, y_va = make_dataset(n_val, seed=2)
     y_tr_n, y_va_n = normalize_spec(y_tr), normalize_spec(y_va)
@@ -69,6 +74,7 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
 
     t0 = time.time()
     history = []
+    best_va, best_state = float("inf"), None
     for ep in range(epochs):
         perm = torch.randperm(n_train)
         tot, tot_b = 0.0, 0.0
@@ -93,6 +99,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
         # every epoch: evaluate on held-out data and log, so progress is watchable
         va = evaluate(model, y_va, y_va_n, quiet=True)
         history.append((ep, tot / n_train, va))
+        if va < best_va:  # checkpoint the best model seen, not just the last
+            best_va = va
+            best_state = {k: v.clone() for k, v in model.state_dict().items()}
         print(f"ep {ep:3d}/{epochs} | train loss {tot/n_train:.5f} | "
               f"val spec-MSE {va:.5f} | baseline theta-MSE {tot_b/n_train:.5f} | "
               f"{time.time()-t0:.0f}s")
@@ -102,9 +111,13 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
     print("\n=== Held-out evaluation (naive baseline, spec-space) ===")
     evaluate(baseline, y_va, y_va_n)
 
-    torch.save({"model": model.state_dict(), "baseline": baseline.state_dict()},
-               "inverse_model.pt")
-    print("\nSaved weights -> inverse_model.pt")
+    if best_state is not None:
+        model.load_state_dict(best_state)  # report/save the best epoch, not the last
+    print(f"\nbest validation spec-MSE: {best_va:.6f}")
+    torch.save({"model": model.state_dict(), "baseline": baseline.state_dict(),
+                "best_val": best_va, "seed": seed},
+               f"inverse_model_seed{seed}.pt")
+    print(f"Saved weights -> inverse_model_seed{seed}.pt")
 
     try:  # loss curve figure — visual record of the training run
         import matplotlib
@@ -161,8 +174,14 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--quick", action="store_true", help="small fast run for smoke test")
     p.add_argument("--pmma", action="store_true", help="PMMA-only: pin material, design geometry")
+    p.add_argument("--samples", type=int, default=30000, help="training set size")
+    p.add_argument("--epochs", type=int, default=40, help="passes through the dataset")
+    p.add_argument("--batch", type=int, default=512, help="batch size")
+    p.add_argument("--lr", type=float, default=1e-3, help="learning rate")
+    p.add_argument("--seed", type=int, default=0, help="random seed (run >=5 seeds for paper)")
     args = p.parse_args()
     if args.pmma:
         use_pmma()
-    m = train(quick=args.quick)
+    m = train(n_train=args.samples, epochs=args.epochs, batch=args.batch,
+              lr=args.lr, quick=args.quick, seed=args.seed)
     demo_reverse_engineering(m)
