@@ -98,7 +98,7 @@ def optimize():
             wcsv = csv.writer(f)
             wcsv.writerow(["date", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
             import datetime
-            wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.4f}"] +
+            wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.8f}"] +
                           [f"{v:.5g}" for v in y[i_best].tolist()] +
                           [f"{v:.5g}" for v in theta[i_best].tolist()])
         print(f"NEW RECORD: J={J[i_best]:.4f} beats {prev_J:.4f} -> best_design_ever.csv")
