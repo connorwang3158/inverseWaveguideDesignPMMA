@@ -68,6 +68,7 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
     z_tr = normalize_theta(theta_tr)
 
     t0 = time.time()
+    history = []
     for ep in range(epochs):
         perm = torch.randperm(n_train)
         tot, tot_b = 0.0, 0.0
@@ -89,11 +90,12 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
             tot_b += loss_b.item() * len(idx)
         sched.step()
 
-        if ep % max(1, epochs // 10) == 0 or ep == epochs - 1:
-            va = evaluate(model, y_va, y_va_n, quiet=True)
-            print(f"ep {ep:3d} | tandem train {tot/n_train:.5f} | "
-                  f"val spec-MSE {va:.5f} | baseline theta-MSE {tot_b/n_train:.5f} | "
-                  f"{time.time()-t0:.0f}s")
+        # every epoch: evaluate on held-out data and log, so progress is watchable
+        va = evaluate(model, y_va, y_va_n, quiet=True)
+        history.append((ep, tot / n_train, va))
+        print(f"ep {ep:3d}/{epochs} | train loss {tot/n_train:.5f} | "
+              f"val spec-MSE {va:.5f} | baseline theta-MSE {tot_b/n_train:.5f} | "
+              f"{time.time()-t0:.0f}s")
 
     print("\n=== Held-out evaluation (tandem, spec-space) ===")
     evaluate(model, y_va, y_va_n)
@@ -103,6 +105,22 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False)
     torch.save({"model": model.state_dict(), "baseline": baseline.state_dict()},
                "inverse_model.pt")
     print("\nSaved weights -> inverse_model.pt")
+
+    try:  # loss curve figure — visual record of the training run
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        eps, tr, va = zip(*history)
+        fig, ax = plt.subplots(figsize=(6, 4))
+        ax.semilogy(eps, tr, label="train loss")
+        ax.semilogy(eps, va, label="validation spec-MSE")
+        ax.set_xlabel("epoch (pass through dataset)")
+        ax.set_ylabel("loss (log scale, lower = better)")
+        ax.set_title("Inverse network training progress")
+        ax.legend(); fig.tight_layout(); fig.savefig("loss_curve.png", dpi=150)
+        print("Saved training curve -> loss_curve.png")
+    except ImportError:
+        print("(install matplotlib to also get loss_curve.png)")
     return model
 
 

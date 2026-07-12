@@ -157,20 +157,30 @@ def transmission(theta: torch.Tensor, field_deg: float = 0.0) -> torch.Tensor:
     path_mm = n_bounces * t / torch.cos(ang).clamp(min=0.2)
     T_bulk = torch.exp(-alpha * path_mm)
 
-    # --- Roughness scattering, Payne-Lacey-form per TIR bounce  # SYNC constants
+    # --- Roughness scattering per TIR bounce: Tien (1971, Appl. Opt.) specular
+    #     reflection loss  R = exp[-(4*pi*sigma*n*cos(theta)/lambda)^2], with a
+    #     Payne & Lacey (1994) correlation-length weighting (longer Lc -> more
+    #     forward scatter retained).  # SYNC corr weighting against Paper 1
     lam_mm = lam_g * 1e-6
     per_bounce = (4 * torch.pi * (sigma * 1e-6) * n * torch.cos(ang) / lam_mm) ** 2
-    corr = 1.0 / (1.0 + (Lc / 3e5))       # longer Lc -> more forward (less lost) scatter
+    corr = 1.0 / (1.0 + (Lc / 3e5))
     T_scatter = torch.exp(-per_bounce * corr * n_bounces * 0.5)
 
-    # --- Grating coupling efficiency (in + out), phase-depth + duty + detuning
-    phase = torch.pi * depth * (n - 1.0) / lam_g
-    eta = torch.sin(phase) ** 2 * torch.exp(-((duty - 0.5) ** 2) / 0.045)
+    # --- Grating coupling: scalar-diffraction first-order efficiency of a binary
+    #     phase grating (standard result, cf. O'Shea et al., "Diffractive Optics";
+    #     Goodman, "Fourier Optics"):
+    #         eta_1 = 4 * (sin(pi*duty)/pi)^2 * sin^2(phi/2),
+    #         phi   = 2*pi*depth*(n-1)/lambda   (phase depth)
+    #     Theoretical max 4/pi^2 ~ 40.5% at duty=0.5, phi=pi — this hard physical
+    #     ceiling replaces the earlier ad-hoc placeholder. Angular detuning models
+    #     finite coupler acceptance (cf. Zhao et al., Opt. Express 2024).  # SYNC
+    phi = 2 * torch.pi * depth * (n - 1.0) / lam_g
+    eta = 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
     detune = torch.exp(-(torch.sin(th_i) / 0.35) ** 2)             # angular acceptance
-    eta = (0.05 + 0.95 * eta) * (0.3 + 0.7 * detune)               # floor avoids dead gradients
-    T_grating = eta ** 2                                            # two couplers
+    eta = (0.02 + 0.98 * eta) * (0.3 + 0.7 * detune)               # small floor: keeps gradients alive
+    T_grating = eta ** 2                                            # in-coupler x out-coupler
 
-    return T_fresnel * T_bulk * T_scatter * T_grating * 0.55       # SYNC global scale -> ~6%
+    return T_fresnel * T_bulk * T_scatter * T_grating
 
 
 def mtf_system(theta: torch.Tensor) -> torch.Tensor:
@@ -194,14 +204,17 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
     blur_chrom = spread * 17.0 * 1e-3 * 0.10    # SYNC: retinal mm per rad, weight
     mtf_chrom = torch.exp(-2 * (torch.pi * blur_chrom * f) ** 2)
 
-    # 4) Grating MTF: periodic wavefront modulation contrast loss
-    mtf_grat = 1.0 - 0.12 * torch.sin(torch.pi * depth * (n - 1) / 532.0) ** 2  # SYNC
+    # 4) Grating MTF: contrast loss from periodic wavefront modulation — scales
+    #    with phase depth, creating the physical MTF-vs-efficiency tension
+    #    (deeper grating couples more light but modulates the wavefront more)  # SYNC
+    phi = 2 * torch.pi * depth * (n - 1.0) / 532.0
+    mtf_grat = 1.0 - 0.15 * torch.sin(phi / 2) ** 2
 
-    # 5) Coupler MTF: finite-efficiency contrast degradation across coupling events
-    phase = torch.pi * depth * (n - 1.0) / 532.0
-    eta = (0.05 + 0.95 * torch.sin(phase) ** 2
-           * torch.exp(-((duty - 0.5) ** 2) / 0.045))
-    mtf_coup = 0.80 + 0.20 * eta                                                 # SYNC
+    # 5) Coupler MTF: contrast degradation from finite diffraction efficiency
+    #    across two coupling events (Goodsell et al. 2024 framing); eta normalized
+    #    by the 4/pi^2 scalar ceiling  # SYNC
+    eta = 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
+    mtf_coup = 0.80 + 0.20 * (eta / 0.4053)
 
     return mtf_diff * mtf_rough * mtf_chrom * mtf_grat * mtf_coup
 
