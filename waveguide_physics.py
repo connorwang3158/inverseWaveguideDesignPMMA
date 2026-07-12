@@ -55,6 +55,26 @@ BOUNDS = torch.tensor([
 ])
 LOG_DIMS = (1, 3)  # alpha and Lc are sampled/normalized in log-space
 
+# PMMA-only mode: material params pinned to PMMA's literature range (Paper 1:
+# n~1.49, RMS roughness 0.87 nm, correlation length ~300,000 nm, bulk 1e-5).
+# Narrow-but-nonzero ranges keep sampling/normalization well-defined.  # SYNC
+PMMA_BOUNDS = torch.tensor([
+    [1.48, 1.50],       # n
+    [5e-5, 5e-4],       # alpha (1/mm)
+    [0.7, 1.1],         # sigma (nm)
+    [2e5, 4e5],         # Lc (nm)
+    [0.3, 2.0],         # t (mm)        — free geometry
+    [300.0, 700.0],     # period (nm)   — free geometry
+    [20.0, 400.0],      # depth (nm)    — free geometry
+    [0.2, 0.8],         # duty          — free geometry
+])
+
+
+def use_pmma():
+    """Switch the whole engine to PMMA-only design space (call before anything else)."""
+    BOUNDS.copy_(PMMA_BOUNDS)
+    print("[physics] PMMA-only mode: material params pinned, geometry free")
+
 
 def sample_theta(n_samples: int, generator=None) -> torch.Tensor:
     """Uniform (log-uniform for LOG_DIMS) sampling within physical bounds."""

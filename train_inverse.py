@@ -21,7 +21,7 @@ import torch.nn as nn
 
 from waveguide_physics import (
     forward_model, sample_theta, denormalize_theta, normalize_theta,
-    normalize_spec,
+    normalize_spec, use_pmma,
 )
 
 
@@ -142,6 +142,9 @@ def demo_reverse_engineering(model):
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--quick", action="store_true", help="small fast run for smoke test")
+    p.add_argument("--pmma", action="store_true", help="PMMA-only: pin material, design geometry")
     args = p.parse_args()
+    if args.pmma:
+        use_pmma()
     m = train(quick=args.quick)
     demo_reverse_engineering(m)
