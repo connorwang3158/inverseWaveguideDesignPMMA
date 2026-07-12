@@ -1,0 +1,22 @@
+<html><head><meta charset='utf-8'><title>Waveguide Results</title>
+<style>body{font:14px -apple-system,sans-serif;max-width:900px;margin:30px auto;color:#1a2233}
+h1{font-size:22px} h2{font-size:16px;margin-top:28px;border-bottom:1px solid #ccd;padding-bottom:4px}
+table{border-collapse:collapse;margin-top:8px} td,th{border:1px solid #ccd;padding:4px 9px;font-size:12px}
+th{background:#eef2fa} img{max-width:100%;border:1px solid #ccd;border-radius:6px;margin-top:8px}
+.miss{color:#a33;font-size:12px}</style></head><body>
+<h1>AR Waveguide Inverse Design — Results Report</h1>
+<p>Generated 2026-07-12 01:53. Re-run <code>python3 make_report.py</code>
+after any experiment to refresh.</p>
+<h2>Training runs (5-seed protocol table)</h2>
+<p class='miss'>training_runs.csv not found — run the matching script first.</p>
+<h2>Optimal designs (gradient search winners)</h2>
+<p class='miss'>optimal_designs.csv not found — run the matching script first.</p>
+<h2>Trade-off sweep (priority menu)</h2>
+<table><tr><th>w_mtf</th><th>w_T</th><th>w_ca</th><th>MTF</th><th>T</th><th>chrom_deg</th><th>T_fov</th><th>n</th><th>alpha</th><th>sigma</th><th>Lc</th><th>t</th><th>period</th><th>depth</th><th>duty</th></tr><tr><td>3.0</td><td>0.3</td><td>0.5</td><td>0.7373284697532654</td><td>0.3765394687652588</td><td>8.947731971740723</td><td>0.12200822681188583</td><td>1.4999258518218994</td><td>5.61855522391852e-05</td><td>0.7033596634864807</td><td>399623.9375</td><td>0.3608524799346924</td><td>681.8309936523438</td><td>399.8428649902344</td><td>0.5000213980674744</td></tr><tr><td>2.0</td><td>0.6</td><td>0.5</td><td>0.7373271584510803</td><td>0.3765103220939636</td><td>8.947569847106934</td><td>0.12199877947568893</td><td>1.49992036819458</td><td>5.6192624469986185e-05</td><td>0.7025580406188965</td><td>399724.5625</td><td>0.36101531982421875</td><td>681.8502197265625</td><td>399.82952880859375</td><td>0.500016987323761</td></tr><tr><td>1.0</td><td>1.0</td><td>0.5</td><td>0.7373266220092773</td><td>0.37649956345558167</td><td>8.947500228881836</td><td>0.12199530750513077</td><td>1.4999183416366577</td><td>5.619568037218414e-05</td><td>0.70219886302948</td><td>399770.6875</td><td>0.361087441444397</td><td>681.8587646484375</td><td>399.82452392578125</td><td>0.500014066696167</td></tr><tr><td>0.6</td><td>2.0</td><td>0.5</td><td>0.7373261451721191</td><td>0.3764963150024414</td><td>8.94837760925293</td><td>0.121994249522686</td><td>1.49991774559021</td><td>5.619626972475089e-05</td><td>0.7020807266235352</td><td>399786.3125</td><td>0.3611131012439728</td><td>681.7662963867188</td><td>399.8230285644531</td><td>0.500012993812561</td></tr><tr><td>0.3</td><td>3.0</td><td>0.5</td><td>0.7373257875442505</td><td>0.3764953017234802</td><td>8.949359893798828</td><td>0.12199393659830093</td><td>1.4999175071716309</td><td>5.619616058538668e-05</td><td>0.7020459175109863</td><td>399790.875</td><td>0.3611226975917816</td><td>681.662353515625</td><td>399.82257080078125</td><td>0.5000126957893372</td></tr><tr><td>1.0</td><td>1.0</td><td>2.0</td><td>0.737341046333313</td><td>0.3758073151111603</td><td>8.789920806884766</td><td>0.12177107483148575</td><td>1.4992867708206177</td><td>6.124646461103112e-05</td><td>0.7067215442657471</td><td>398326.0625</td><td>0.3036857545375824</td><td>699.078857421875</td><td>399.89324951171875</td><td>0.5000600814819336</td></tr></table>
+<h2>Scalar vs rigorous RCWA validation</h2>
+<table><tr><th>depth_nm</th><th>scalar_eta1</th><th>rcwa_TE</th><th>rcwa_TM</th><th>rcwa_unpol</th></tr><tr><td>100</td><td>0.03299697031818189</td><td>0.10214760202133792</td><td>0.006019381078268699</td><td>0.05408349154980331</td></tr><tr><td>200</td><td>0.12124185550557484</td><td>0.265620011333515</td><td>0.026470334084962806</td><td>0.1460451727092389</td></tr><tr><td>300</td><td>0.23599620470141472</td><td>0.3290466710498798</td><td>0.1198468160421544</td><td>0.2244467435460171</td></tr><tr><td>400</td><td>0.3398883082772014</td><td>0.3010971103761334</td><td>0.13967865729410775</td><td>0.2203878838351206</td></tr></table>
+<h2>Training curve</h2>
+<img src='loss_curve.png'>
+<h2>Trade-off frontier</h2>
+<p class='miss'>pareto_front.png not found.</p>
+</body></html>
