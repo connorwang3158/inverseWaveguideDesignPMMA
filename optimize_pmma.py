@@ -81,6 +81,30 @@ def optimize():
                           [f"{v:.5g}" for v in theta[i].tolist()])
     print("\nSaved winners -> optimal_designs.csv")
 
+    # hall of fame: keep the best design EVER seen across all runs; only
+    # updates when a new run beats the record
+    import os
+    hof = "best_design_ever.csv"
+    prev_J = -1e9
+    if os.path.exists(hof):
+        with open(hof) as f:
+            try:
+                prev_J = float(list(csv.reader(f))[1][1])
+            except (IndexError, ValueError):
+                pass
+    i_best = top[0]
+    if J[i_best] > prev_J:
+        with open(hof, "w", newline="") as f:
+            wcsv = csv.writer(f)
+            wcsv.writerow(["date", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+            import datetime
+            wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.4f}"] +
+                          [f"{v:.5g}" for v in y[i_best].tolist()] +
+                          [f"{v:.5g}" for v in theta[i_best].tolist()])
+        print(f"NEW RECORD: J={J[i_best]:.4f} beats {prev_J:.4f} -> best_design_ever.csv")
+    else:
+        print(f"no new record (best this run {J[i_best]:.4f} vs all-time {prev_J:.4f})")
+
     # diversity check: are the optima one basin or several?
     geo = normalize_theta(theta[top])[:, 4:]       # geometry dims only
     spread = geo.std(dim=0).mean().item()
