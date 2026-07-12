@@ -70,6 +70,17 @@ def optimize():
         for lb, v in zip(LABELS, theta[i].tolist()):
             print(f"    {lb:12s} = {v:,.4g}")
 
+    # permanent record of the winners
+    import csv
+    with open("optimal_designs.csv", "w", newline="") as f:
+        wcsv = csv.writer(f)
+        wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+        for rank, i in enumerate(top, 1):
+            wcsv.writerow([rank, f"{J[i]:.4f}"] +
+                          [f"{v:.5g}" for v in y[i].tolist()] +
+                          [f"{v:.5g}" for v in theta[i].tolist()])
+    print("\nSaved winners -> optimal_designs.csv")
+
     # diversity check: are the optima one basin or several?
     geo = normalize_theta(theta[top])[:, 4:]       # geometry dims only
     spread = geo.std(dim=0).mean().item()

@@ -119,6 +119,18 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
                f"inverse_model_seed{seed}.pt")
     print(f"Saved weights -> inverse_model_seed{seed}.pt")
 
+    # permanent record: one line per training run, for the paper's 5-seed table
+    import csv, os
+    new = not os.path.exists("training_runs.csv")
+    with open("training_runs.csv", "a", newline="") as f:
+        wcsv = csv.writer(f)
+        if new:
+            wcsv.writerow(["seed", "samples", "epochs", "batch", "lr",
+                           "iterations", "best_val_specMSE"])
+        wcsv.writerow([seed, n_train, epochs, batch, lr,
+                       steps_per_epoch * epochs, f"{best_va:.6f}"])
+    print("Appended run summary -> training_runs.csv")
+
     try:  # loss curve figure — visual record of the training run
         import matplotlib
         matplotlib.use("Agg")
