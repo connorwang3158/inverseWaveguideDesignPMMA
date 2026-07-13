@@ -9,12 +9,18 @@ import os
 from datetime import datetime
 
 FILES = [
-    ("Training runs (5-seed protocol table)", "training_runs.csv"),
-    ("Optimal designs (gradient search winners)", "optimal_designs.csv"),
+    ("Forward surrogate training runs", "surrogate_runs.csv"),
+    ("Inverse network training runs (5-seed protocol table)", "training_runs.csv"),
+    ("Neural-adjoint winners (network-found, physics-verified)", "optimal_designs_na.csv"),
+    ("Direct gradient-search winners (physics baseline)", "optimal_designs.csv"),
+    ("All-time best design (hall of fame)", "best_design_ever.csv"),
     ("Trade-off sweep (priority menu)", "pareto_results.csv"),
     ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
 ]
-IMAGES = [("Training curve", "loss_curve.png"),
+IMAGES = [("Forward surrogate training curve", "surrogate_loss_curve.png"),
+          ("Surrogate parity (network vs exact physics)", "surrogate_parity.png"),
+          ("Inverse network training curve", "loss_curve.png"),
+          ("Neural-adjoint search", "neural_adjoint_run.png"),
           ("Trade-off frontier", "pareto_front.png")]
 
 
@@ -45,6 +51,14 @@ after any experiment to refresh.</p>"""]
         parts.append(f"<h2>{title}</h2>")
         parts.append(f"<img src='{path}'>" if os.path.exists(path)
                      else f"<p class='miss'>{path} not found.</p>")
+    parts.append("<h2>3D model</h2>")
+    parts.append("<p><a href='waveguide_3d.html'>waveguide_3d.html</a> — interactive "
+                 "3D waveguide (rotate/zoom, live sliders); <code>waveguide_model.stl"
+                 "</code> opens in any 3D viewer. Regenerate with "
+                 "<code>python3 make_3d_model.py</code>."
+                 if os.path.exists("waveguide_3d.html")
+                 else "<p class='miss'>waveguide_3d.html not found — run "
+                      "python3 make_3d_model.py.</p>")
     parts.append("</body></html>")
     with open("results_report.html", "w") as f:
         f.write("\n".join(parts))

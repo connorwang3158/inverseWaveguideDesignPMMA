@@ -37,14 +37,24 @@ canon (verified against publisher listings) and carries the paper's L2 claims.
    headsets: a nanophotonics design perspective. *Nanophotonics*, 10, 41–74.
    https://doi.org/10.1515/nanoph-2020-0410 — system architecture framing.
 
-## B. Machine-learning method in `train_inverse.py`
+## B. Machine-learning method in `surrogate.py`, `train_inverse.py`, `neural_adjoint.py`
 
 10. Liu, D., Tan, Y., Khoram, E., & Yu, Z. (2018). Training deep neural networks
     for the inverse design of nanophotonic structures. *ACS Photonics*, 5(4),
-    1365–1369. (†) — the tandem architecture this code implements.
-11. Ren, S., et al. (2020). Benchmarking deep inverse models over time, and the
-    neural-adjoint method. *NeurIPS 33*. (†) — physics-in-the-loop inverse design.
-12. AutoTandemML (2025). arXiv:2502.15643 — active-learning tandem variant
+    1365–1369. (†) — the tandem architecture `train_inverse.py` implements
+    (inverse net trained through the frozen learned forward model).
+11. Peurifoy, J., et al. (2018). Nanophotonic particle simulation and inverse
+    design using artificial neural networks. *Science Advances*, 4(6), eaar4206.
+    (†) — the forward-surrogate framework `surrogate.py` implements: a deep
+    network trained on simulated data to emulate the electromagnetic response.
+12. Ren, S., Padilla, W., & Malof, J. (2020). Benchmarking deep inverse models
+    over time, and the neural-adjoint method. *NeurIPS 33*. (†) — the
+    neural-adjoint method `neural_adjoint.py` implements: gradient design search
+    through the frozen trained surrogate.
+13. Ma, W., Liu, Z., Kudyshev, Z. A., Boltasseva, A., Cai, W., & Liu, Y. (2021).
+    Deep learning for the design of photonic structures. *Nature Photonics*,
+    15, 77–90. (†) — review anchoring the surrogate + tandem + adjoint taxonomy.
+14. AutoTandemML (2025). arXiv:2502.15643 — active-learning tandem variant
     (comparison baseline candidate).
 
 ## C. Closest prior work (positioning; see research_framework.md §4)

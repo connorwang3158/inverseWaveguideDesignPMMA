@@ -1,0 +1,2 @@
+seed,pmma,samples,epochs,batch,lr,iterations,best_val_MSE,R2_MTF@40cyc/mm,R2_Transmission,R2_ChromSpread(deg),R2_T@FOV
+0,1,50000,80,512,0.001,7840,0.000003,0.99796,0.99989,0.99307,0.99990

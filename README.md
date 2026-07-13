@@ -1,30 +1,58 @@
 # AR Waveguide Inverse Design — Project Files
 
-Companion project to *Modeling Diffractive Singular Flat AR Waveguide Optical Performance* (Paper 1). Goal: a physics-anchored tandem neural network that reverse-engineers waveguide designs from target performance specs. See `research_framework.md` for the full publication plan.
+Companion project to *Modeling Diffractive Singular Flat AR Waveguide Optical
+Performance* (Paper 1). Goal: a machine-learning pipeline in the modern
+waveguide inverse-design framework — a **trained forward surrogate network**
+that learns the physics, a **tandem inverse network** trained through it, and
+a **neural-adjoint design search** that optimizes designs through the trained
+network — with every result verified against exact physics (and spot-checked
+with rigorous RCWA). See `research_framework.md` for the full publication plan.
+
+**New here? Read `HOW_TO_RUN.md` — the plain-English guide.**
 
 ## Files
 
 | File | Purpose |
 |---|---|
+| `HOW_TO_RUN.md` | Plain-English guide: setup, running, overnight training |
 | `research_framework.md` | Publication framework: novelty claim, related work, experiments, venues, timeline |
-| `waveguide_physics.py` | Differentiable PyTorch port of Paper 1's forward model (transmission cascade, 5-component MTF, chromatic spread, FOV) |
-| `train_inverse.py` | Tandem inverse network + naive baseline, dataset generation, training, evaluation, reverse-engineering demo |
-| `inverse_model.pt` | Trained weights (created after running training) |
+| `waveguide_physics.py` | Differentiable PyTorch port of Paper 1's forward model (ground truth + data generator) |
+| `surrogate.py` | **Forward surrogate network** — learns design→performance from physics-labeled data (Peurifoy 2018 / Liu 2018 framework) |
+| `train_inverse.py` | **Tandem inverse network** — trained through the frozen surrogate (default) or the exact physics (ablation) |
+| `neural_adjoint.py` | **Neural-adjoint search** — gradient design optimization through the trained surrogate (Ren 2020), physics-verified |
+| `optimize_pmma.py`, `sweep_pareto.py` | Non-neural gradient baselines + trade-off frontier |
+| `make_3d_model.py` | Interactive 3D waveguide viewer (`waveguide_3d.html`) + STL mesh export |
+| `rigorous_solver.py`, `validate.py` | Vectorial RCWA layer (grcwa) + 7-test integrity suite |
+| `make_report.py` | Bundles every table/figure into `results_report.html` |
+| `overnight.sh` | The full multi-seed training pipeline, unattended |
 
 ## Run
 
 ```bash
-pip install torch
-python3 waveguide_physics.py     # sanity check: forward pass + gradient check
-python3 train_inverse.py --quick # ~1-2 min smoke test
-python3 train_inverse.py         # full run (30k samples, 40 epochs, CPU-ok)
+pip install torch numpy matplotlib
+python3 waveguide_physics.py            # sanity check: forward pass + gradient check
+python3 surrogate.py --pmma --quick     # 1) train the physics-learning network
+python3 train_inverse.py --pmma --quick # 2) train the designer through it (tandem)
+python3 neural_adjoint.py --quick       # 3) optimize designs through the network
+python3 make_3d_model.py                # 4) 3D model of the winning design
+bash overnight.sh                       # the real thing (see HOW_TO_RUN.md)
 ```
 
 ## Architecture
 
 ```
-target spec y* (4) → InverseNet (MLP) → design θ (8) → frozen physics f(θ) → spec ŷ
-                                loss = ||ŷ − y*||² (spec space)
+Stage 1 — learn the physics (surrogate.py):
+  design θ (8) ──► ForwardNet ──► spec ŷ (4)     trained on physics-labeled samples
+
+Stage 2 — learn to design (train_inverse.py, tandem):
+  target y* (4) ──► InverseNet ──► θ̂ (8) ──► frozen ForwardNet ──► ŷ
+                                   loss = ||ŷ − y*||²  (spec space)
+
+Stage 3 — hunt the optimum (neural_adjoint.py):
+  θ (trainable) ──► frozen ForwardNet ──► objective J;  ∂J/∂θ through the network
+
+Verification — every stage is scored against the EXACT physics engine
+(waveguide_physics.py), and headline designs are spot-checked in RCWA.
 ```
 
 Spec: [MTF@40cyc/mm, transmission, chromatic spread (°), transmission@20° FOV]
@@ -33,7 +61,8 @@ Design: [n, α, σ_RMS, L_corr, thickness, grating period, depth, duty cycle]
 ## Critical next steps (before publication experiments)
 
 1. **Sync physics constants** — every `# SYNC` comment in `waveguide_physics.py` marks a simplified placeholder. Replace with the exact formulas/values from the Paper 1 GitHub repo, then unit-test until the engine reproduces published numbers (Si₃N₄ loss 93.37–93.39%, PMMA MTF 0.6426–0.6430).
-2. Add L-BFGS/random-search and learned-surrogate-tandem baselines (framework §6.3).
+   **Known caveat found by the design searches:** the transmission cascade uses a fixed bounce count and does NOT enforce total internal reflection, so optimizers drift toward large grating periods (>532 nm) whose first order is not actually guided. `neural_adjoint.py` flags each winner (`tir_guided_green` column); to restrict the search to guided designs, lower the period upper bound in `PMMA_BOUNDS` (e.g. 530 nm), or add a guidance penalty when syncing the physics.
+2. Run the full 5-seed overnight protocol; report surrogate R², tandem spec-MSE (surrogate vs physics decoder), and neural-adjoint vs direct-gradient search in the baseline table (framework §6.3).
 3. Out-of-distribution and design-manifold experiments (framework §6.4–6.5).
 4. Reverse-engineer published commercial-class specs as the headline case study (§6.6).
-5. Optional: spot-check 2–3 recovered designs in `grcwa` (free RCWA) to preempt the "analytic model" review objection.
+5. Spot-check the top recovered designs in `grcwa` (free RCWA) to preempt the "analytic model" review objection.
