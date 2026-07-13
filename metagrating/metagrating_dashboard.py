@@ -11,8 +11,11 @@ import json
 import os
 import time
 
-HTML = "metagrating_live.html"
-HOF = "metagrating_hof.json"
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# anchored to this folder (previously CWD-relative: running from the project
+# root wrote a second, divergent set of dashboard/HOF files at the root)
+HTML = os.path.join(_HERE, "metagrating_live.html")
+HOF = os.path.join(_HERE, "metagrating_hof.json")
 METRICS = ("eta_TE", "eta_TM", "eta_unpol")
 
 
