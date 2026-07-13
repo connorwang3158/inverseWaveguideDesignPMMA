@@ -130,13 +130,16 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
               f"val spec-MSE {va:.5f} | baseline theta-MSE {tot_b/n_train:.5f} | "
               f"{time.time()-t0:.0f}s")
 
-    print("\n=== Held-out evaluation (tandem, spec-space) ===")
+    if best_state is not None:
+        model.load_state_dict(best_state)  # report/save the best epoch, not the
+        # last — restored BEFORE the final evaluation so the printed table and
+        # the saved checkpoint describe the SAME model (previously the printout
+        # scored the last epoch while the checkpoint stored the best epoch)
+
+    print("\n=== Held-out evaluation (tandem, spec-space, best epoch) ===")
     evaluate(model, y_va, y_va_n)
     print("\n=== Held-out evaluation (naive baseline, spec-space) ===")
     evaluate(baseline, y_va, y_va_n)
-
-    if best_state is not None:
-        model.load_state_dict(best_state)  # report/save the best epoch, not the last
     print(f"\nbest validation spec-MSE (exact physics): {best_va:.6f}")
     torch.save({"model": model.state_dict(), "baseline": baseline.state_dict(),
                 "best_val": best_va, "seed": seed, "decoder": decoder},
@@ -195,8 +198,12 @@ def evaluate(model, y_true, y_true_n, quiet=False):
 def demo_reverse_engineering(model):
     """Headline demo: request a target spec, read back the recovered design."""
     print("\n=== Reverse-engineering demo ===")
-    # target: sharp (MTF 0.65), efficient-for-class (T 6.5%), low chrom spread
-    y_star = torch.tensor([[0.65, 0.065, 14.0, 0.045]])
+    # target: sharp (MTF 0.65), efficient-for-class (T 6.5%), low-end chromatic
+    # spread. NOTE: in the PMMA guided window the in-guide RGB spread is
+    # physically ~29-36 deg (period 430-449 nm, n~1.49), so the target must sit
+    # inside that range — the old target of 14 deg was unreachable and made the
+    # demo look like a network failure rather than an infeasible request.
+    y_star = torch.tensor([[0.65, 0.065, 30.0, 0.045]])
     theta = denormalize_theta(model(normalize_spec(y_star)))
     y_ach = forward_model(theta)
     labels = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
