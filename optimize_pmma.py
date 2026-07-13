@@ -22,6 +22,7 @@ import torch
 
 from waveguide_physics import (
     forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
+    tir_penalty, transmission_polarized, fov_window_deg,
 )
 
 N_STARTS = 300     # random starting designs
@@ -33,10 +34,15 @@ LABELS = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
           "period(nm)", "depth(nm)", "duty"]
 
 
+W_TIR = 10.0   # weight of the TIR-feasibility penalty (FIX-1); designs whose
+               # RGB orders leave the guiding window are steered back in
+
+
 def objective(theta: torch.Tensor) -> torch.Tensor:
     y = forward_model(theta)                       # [B,4]
     mtf, T, ca, T_fov = y.unbind(dim=1)
-    return W_MTF * mtf + W_T * (T / 0.10) + 0.3 * (T_fov / 0.10) - W_CA * (ca / 30.0)
+    return (W_MTF * mtf + W_T * (T / 0.10) + 0.3 * (T_fov / 0.10)
+            - W_CA * (ca / 30.0) - W_TIR * tir_penalty(theta))
 
 
 def optimize():
@@ -62,29 +68,40 @@ def optimize():
         y = forward_model(theta)
         top = torch.topk(J, k=5).indices
 
+    pol = transmission_polarized(theta)
+    fov_lo, fov_hi, fov_w = fov_window_deg(theta)
+
     print("\n=== Top 5 optimal PMMA designs ===")
     for rank, i in enumerate(top, 1):
         mtf, T, ca, T_fov = y[i].tolist()
         print(f"\n#{rank}  J={J[i]:.4f} | MTF {mtf:.4f} | T {100*T:.2f}% | "
               f"chrom {ca:.2f} deg | T@FOV {100*T_fov:.2f}%")
+        print(f"    T_TE {100*pol['TE'][i]:.2f}%  T_TM {100*pol['TM'][i]:.2f}%  "
+              f"diattenuation {pol['diattenuation'][i]:.3f}")
+        print(f"    full-RGB guided FOV window: [{fov_lo[i]:.1f}, {fov_hi[i]:.1f}] deg "
+              f"(width {fov_w[i]:.1f} deg)")
         for lb, v in zip(LABELS, theta[i].tolist()):
             print(f"    {lb:12s} = {v:,.4g}")
 
-    # permanent record of the winners
+    # permanent record of the winners (now with polarization + FOV window)
     import csv
     with open("optimal_designs.csv", "w", newline="") as f:
         wcsv = csv.writer(f)
-        wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+        wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov",
+                       "T_TE", "T_TM", "fov_lo_deg", "fov_hi_deg"] + LABELS)
         for rank, i in enumerate(top, 1):
             wcsv.writerow([rank, f"{J[i]:.4f}"] +
                           [f"{v:.5g}" for v in y[i].tolist()] +
+                          [f"{pol['TE'][i]:.5g}", f"{pol['TM'][i]:.5g}",
+                           f"{fov_lo[i]:.3f}", f"{fov_hi[i]:.3f}"] +
                           [f"{v:.5g}" for v in theta[i].tolist()])
     print("\nSaved winners -> optimal_designs.csv")
 
     # hall of fame: keep the best design EVER seen across all runs; only
     # updates when a new run beats the record
     import os
-    hof = "best_design_ever.csv"
+    hof = "best_design_ever_v2.csv"   # v2: records from the corrected (TIR-
+    # constrained, polarization-resolved) physics; v1 records are not comparable
     prev_J = -1e9
     if os.path.exists(hof):
         with open(hof) as f:
@@ -101,7 +118,7 @@ def optimize():
             wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.8f}"] +
                           [f"{v:.5g}" for v in y[i_best].tolist()] +
                           [f"{v:.5g}" for v in theta[i_best].tolist()])
-        print(f"NEW RECORD: J={J[i_best]:.4f} beats {prev_J:.4f} -> best_design_ever.csv")
+        print(f"NEW RECORD: J={J[i_best]:.4f} beats {prev_J:.4f} -> {hof}")
     else:
         print(f"no new record (best this run {J[i_best]:.4f} vs all-time {prev_J:.4f})")
 

@@ -14,6 +14,7 @@ import torch
 
 from waveguide_physics import (
     forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
+    tir_penalty,
 )
 
 N_STARTS, N_STEPS, LR = 80, 200, 0.03
@@ -32,12 +33,14 @@ def run_one(w_mtf, w_T, w_ca, seed=0):
     for _ in range(N_STEPS):
         theta = denormalize_theta(torch.sigmoid(w))
         y = forward_model(theta)
-        J = w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
+        J = (w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
+             - 10.0 * tir_penalty(theta))
         opt.zero_grad(); (-J.sum()).backward(); opt.step()
     with torch.no_grad():
         theta = denormalize_theta(torch.sigmoid(w))
         y = forward_model(theta)
-        J = w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
+        J = (w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
+             - 10.0 * tir_penalty(theta))
         i = J.argmax()
     return theta[i], y[i]
 
@@ -71,7 +74,7 @@ def main():
                         xytext=(4, 4), textcoords="offset points")
         fig.colorbar(sc, label="chromatic spread (deg)")
         ax.set_xlabel("Transmission (%)"); ax.set_ylabel("System MTF @ 40 cyc/mm")
-        ax.set_title("PMMA design trade-off frontier (placeholder physics)")
+        ax.set_title("PMMA design trade-off frontier (TIR-constrained physics v2)")
         fig.tight_layout(); fig.savefig("pareto_front.png", dpi=150)
         print("saved pareto_front.png")
     except ImportError:

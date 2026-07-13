@@ -44,8 +44,8 @@
       <option value="sin">Silicon nitride (n=2.0)</option>
       <option value="sito">Silica-titania (n=1.8)</option>
     </select>
-    <label>Grating period Λ <b id="v_per"></b></label>
-    <input type="range" id="per" min="300" max="700" value="510">
+    <label>Grating period Λ <b id="v_per"></b> <span style="color:#8b96ab">(RGB guided: 429–450nm @ n≈1.49)</span></label>
+    <input type="range" id="per" min="300" max="700" value="440">
     <label>Grating depth d <b id="v_dep"></b></label>
     <input type="range" id="dep" min="20" max="400" value="330">
     <label>Duty cycle <b id="v_dut"></b></label>
@@ -73,35 +73,42 @@ const MATS = { pmma:[1.49,2e-4,0.87,3e5], glass:[1.51,3e-5,5.0,1e6], sin:[2.0,1e
 const WLS = [450,532,635], COLS = ["#5aa0ff","#59d98c","#ff6b5a"];
 const $ = id => document.getElementById(id);
 
-// ---- physics: direct JS port of waveguide_physics.py -----------------------
-function smoothSin(s){ return 0.98*Math.tanh(Math.max(s,0.02)/0.98); }
+// ---- physics: direct JS port of waveguide_physics.py (v2: TIR-constrained,
+// polarization-resolved Fresnel, geometric bounce count) ----------------------
 function physics(p){
   const [n,alpha,sigma,Lc] = MATS[p.mat];
-  const lam=532, thI=p.fov*Math.PI/180;
-  const angles = WLS.map(w => Math.asin(smoothSin(w/(n*p.per))));
+  const lam=532, thI=p.fov*Math.PI/180, si=Math.sin(thI), LPROP=20;
+  // field-angle grating equation: n sin(th_d) = sin(th_i) + lambda/period
+  const xs = WLS.map(w => si + w/p.per);
+  const guided = xs.map(x => x>1 && x<n);                 // TIR window (FIX-1)
+  const angles = xs.map(x => Math.asin(Math.min(Math.max(x/n,1e-4),0.9995)));
   const chrom = (angles[2]-angles[0])*180/Math.PI;
-  // Fresnel (unpolarized, two interfaces)
-  const st=Math.min(Math.sin(thI)/n,0.999), ci=Math.cos(thI), ct=Math.sqrt(1-st*st);
-  const rs=((ci-n*ct)/(ci+n*ct))**2, rp=((n*ci-ct)/(n*ci+ct))**2, Tf=(1-0.5*(rs+rp))**2;
-  // bulk + roughness along zig-zag (Tien 1971 per-bounce)
-  const ang=Math.asin(smoothSin(lam/(n*p.per))), NB=10, path=NB*p.thk/Math.max(Math.cos(ang),0.2);
-  const Tb=Math.exp(-alpha*path);
+  // Fresnel per polarization; unpolarized = mean of POWER transmissions (FIX-3)
+  const st=Math.min(si/n,0.9995), ci=Math.cos(thI), ct=Math.sqrt(1-st*st);
+  const rs=((ci-n*ct)/(ci+n*ct))**2, rp=((n*ci-ct)/(n*ci+ct))**2;
+  const Tf=0.5*((1-rs)**2+(1-rp)**2);
+  // bulk + roughness along zig-zag (Tien 1971 per-bounce, geometric N_b FIX-4)
+  const xg=si+lam/p.per, gG=(xg>1&&xg<n)?1:0;
+  const ang=Math.asin(Math.min(Math.max(xg/n,1e-4),0.9995));
+  const NB=Math.min(Math.max(LPROP/(2*p.thk*Math.tan(ang)),1),60);
+  const Tb=Math.exp(-alpha*NB*p.thk/Math.cos(ang));
   const pb=(4*Math.PI*(sigma*1e-6)*n*Math.cos(ang)/(lam*1e-6))**2, corr=1/(1+Lc/3e5);
-  const Ts=Math.exp(-pb*corr*NB*0.5);
+  const Ts=Math.exp(-pb*corr*NB);
   // coupling: geometric uses mirror reflectance chain; diffractive uses binary-grating scalar formula
-  let eta, mtfGrat, mtfCoup;
+  let eta, etaIn, mtfGrat, mtfCoup, mask=1;
   if (p.arch==="geo"){
     const R=0.24;               // partial-mirror reflectance per out-coupling event
     eta=0.60*(1-Math.pow(1-R,4));          // cascade of 4 mirrors, embed losses
-    mtfGrat=0.97; mtfCoup=0.88;            // no periodic modulation; coating scatter
+    etaIn=eta; mtfGrat=0.97; mtfCoup=0.88; // no periodic modulation; coating scatter
   } else {
     const phi=2*Math.PI*p.dep*(n-1)/lam;
     eta=4*(Math.sin(Math.PI*p.dut)/Math.PI)**2*Math.sin(phi/2)**2;
-    eta=(0.02+0.98*eta)*(0.3+0.7*Math.exp(-(Math.sin(thI)/0.35)**2));
+    etaIn=eta*Math.exp(-(si/0.35)**2);     // acceptance on in-coupler only (FIX-5)
     mtfGrat=1-0.15*Math.sin(phi/2)**2;
-    mtfCoup=0.80+0.20*(4*(Math.sin(Math.PI*p.dut)/Math.PI)**2*Math.sin(phi/2)**2)/0.4053;
+    mtfCoup=0.80+0.20*eta/0.4053;
+    mask=gG;                               // unguided design -> no transmission
   }
-  let T=Tf*Tb*Ts*eta*eta;
+  let T=mask*Tf*Tb*Ts*etaIn*eta;
   let ca=chrom;
   if (p.arch==="double"){ T*=0.82; ca*=0.35; }   // 2nd layer: extra loss, per-band correction
   if (p.arch==="geo"){ ca*=0.08; }               // mirrors ~achromatic

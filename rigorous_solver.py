@@ -157,6 +157,36 @@ def convergence_check(nGs=(41, 61, 81, 101)):
         print(f"  nG={g:4d}  T(+1)={r['T1']:.5f}")
 
 
+def verify_designs(csv_in="optimal_designs.csv", csv_out="design_rcwa_check.csv",
+                   wavelengths=(450.0, 532.0, 635.0)):
+    """Rigorous (vector, per-polarization) check of the analytic engine's top
+    designs: for each design row, solve the in-coupler with RCWA at normal
+    incidence for RGB and record TE/TM first-order efficiencies next to the
+    scalar prediction. This is the L2 evidence backing every headline design."""
+    import csv, os
+    if not os.path.exists(csv_in):
+        print(f"{csv_in} not found — run optimize_pmma.py first"); return
+    with open(csv_in) as f:
+        rows = list(csv.DictReader(f))
+    out = []
+    print(f"RCWA verification of {len(rows)} designs x {len(wavelengths)} wavelengths")
+    print(f"{'rank':>4} {'lam':>5} {'scalar':>8} {'TE':>8} {'TM':>8} {'unpol':>8}")
+    for r in rows:
+        n = float(r["n"]); per = float(r["period(nm)"])
+        dep = float(r["depth(nm)"]); dut = float(r["duty"])
+        for lam in wavelengths:
+            s = scalar_eta(dep, dut, n=n, lam=lam)
+            unp, te, tm = eta_unpolarized(per, dep, dut, lam, n_sub=n)
+            out.append([r["rank"], lam, per, dep, dut, s, te, tm, unp])
+            print(f"{r['rank']:>4} {lam:5.0f} {s:8.4f} {te:8.4f} {tm:8.4f} {unp:8.4f}")
+    with open(csv_out, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["rank", "wavelength_nm", "period_nm", "depth_nm", "duty",
+                    "scalar_eta1", "rcwa_TE", "rcwa_TM", "rcwa_unpol"])
+        w.writerows(out)
+    print(f"saved -> {csv_out}")
+
+
 def main():
     import csv
     convergence_check()
@@ -181,4 +211,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--designs" in sys.argv:
+        verify_designs()     # L2 check of optimize_pmma.py winners
+    else:
+        main()

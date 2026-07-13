@@ -13,7 +13,7 @@ assumptions" (L1) only. See framework Sections 4-5 before citing any output.
 import torch
 
 from waveguide_physics import (
-    WL, transmission, mtf_system, _smooth_sin, sample_theta,
+    WL, transmission, mtf_system, sample_theta, diffraction_angle, n_bounces,
 )
 
 # ----------------------------------------------------------------------------
@@ -30,8 +30,8 @@ BANDS = ([0, 1], [2])  # indices into WL
 def _band_chromatic_deg(n, period, band):
     """Chromatic spread across only the wavelengths routed to this layer."""
     wl = WL[band]
-    s = wl / (n.unsqueeze(-1) * period.unsqueeze(-1))
-    ang = torch.asin(_smooth_sin(s))
+    x = wl / period.unsqueeze(-1)                  # normal incidence
+    ang = diffraction_angle(x, n.unsqueeze(-1))
     return torch.rad2deg(ang.max(dim=-1).values - ang.min(dim=-1).values)
 
 
@@ -113,7 +113,7 @@ def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.0
 
     # bulk + roughness along the TIR path (propagation angle set by prism, ~50 deg)
     ang = torch.deg2rad(torch.tensor(50.0))
-    NB = 10.0
+    NB = n_bounces(t, ang)                # geometric bounce count (FIX-4)
     T_bulk = torch.exp(-alpha * NB * t / torch.cos(ang))
     pb = (4 * torch.pi * (sigma * 1e-6) * n * torch.cos(ang) / 532e-6) ** 2
     T_scatter = torch.exp(-pb * (1.0 / (1.0 + Lc / 3e5)) * NB * 0.5)

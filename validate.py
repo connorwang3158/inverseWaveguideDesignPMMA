@@ -21,6 +21,13 @@ Tests:
   V7 Model gates            G2 (double->singular limiting case) and G3
                             (geometric equal-extraction design rule), from
                             architectures.py.
+  V8 TIR enforcement        the analytic engine must assign ~zero transmission
+                            to designs whose first order is not guided
+                            (1 < sin(th_i)+lambda/period < n violated), and
+                            nonzero transmission inside the guided window.
+  V9 Brewster / vector      the polarized Fresnel factor must vanish for TM
+                            reflection at Brewster's angle th_B=atan(n) and
+                            satisfy T_unpol = (T_TE+T_TM)/2 exactly.
 """
 
 import numpy as np
@@ -94,6 +101,39 @@ def v6_convergence():
           f"T(+1) spread over nG 41..81 = {spread:.2e}")
 
 
+def v8_tir():
+    import torch
+    from waveguide_physics import use_pmma, sample_theta, transmission
+    use_pmma()
+    torch.manual_seed(0)
+    th = sample_theta(64)
+    T_ok = transmission(th)                     # periods inside guided window
+    bad = th.clone(); bad[:, 5] = 680.0         # the old exploit period
+    T_bad = transmission(bad)
+    check("V8 TIR enforcement",
+          bool((T_bad.max() < 1e-6) and (T_ok.min() > 0)),
+          f"unguided max T = {T_bad.max():.2e} (must be ~0); "
+          f"guided min T = {T_ok.min():.2e} (must be > 0)")
+
+
+def v9_brewster():
+    import torch
+    from waveguide_physics import fresnel_T
+    n = torch.tensor([N_PMMA])
+    th_b = float(np.degrees(np.arctan(N_PMMA)))     # Brewster's angle
+    T_tm = fresnel_T(n, th_b, "TM")
+    err = abs(T_tm.item() - 1.0)                     # R_TM(th_B) = 0 -> T = 1
+    # unpolarized average identity at 20 deg
+    from waveguide_physics import use_pmma, sample_theta, transmission
+    torch.manual_seed(1)
+    th = sample_theta(16)
+    lhs = transmission(th, 3.0, "unpol")
+    rhs = 0.5 * (transmission(th, 3.0, "TE") + transmission(th, 3.0, "TM"))
+    avg_err = (lhs - rhs).abs().max().item()
+    check("V9 Brewster + unpol identity", err < 1e-6 and avg_err < 1e-9,
+          f"1-T_TM(th_B) = {err:.2e}; max|T_unpol-(T_TE+T_TM)/2| = {avg_err:.2e}")
+
+
 def v7_gates():
     import io, contextlib
     from architectures import run_gates
@@ -110,8 +150,8 @@ def v7_gates():
 if __name__ == "__main__":
     print("Independent validation (no Paper 1 references)\n" + "=" * 56)
     v1_fresnel(); v2_energy(); v3_symmetry(); v5_ceiling(); v6_convergence()
-    v7_gates()
-    v4_scalar_limit()   # slowest last (nG=201)
+    v7_gates(); v8_tir(); v9_brewster()
+    v4_scalar_limit()   # slowest last (nG=81)
     n_ok = sum(ok for _, ok in results)
     print("=" * 56)
     print(f"{n_ok}/{len(results)} tests passed")

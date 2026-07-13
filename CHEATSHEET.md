@@ -7,52 +7,41 @@ Everything you need to run, watch, and modify training. Keep this open next to T
 ## 1. How the code works (the 30-second mental model)
 
 ```
-waveguide_physics.py        the SIMULATOR (the "world", exact equations)
+waveguide_physics.py        the SIMULATOR (the "world")
       theta (8 numbers: material + geometry)  ──►  y (4 scores: MTF, T, chrom, T@FOV)
 
-surrogate.py                the APPRENTICE (a neural net that LEARNS the physics)
-train_inverse.py            the TRANSLATOR (spec ──► design), a neural net trained
-                            THROUGH the apprentice (tandem architecture)
-neural_adjoint.py           the TREASURE HUNTER (gradient search through the
-                            trained network, physics-verified)
-optimize_pmma.py            the OLD-SCHOOL HUNTER (direct gradient baseline, no NN)
+train_inverse.py            the TRANSLATOR (spec ──► design), learned by a neural net
+optimize_pmma.py            the TREASURE HUNTER (searches for the best design directly)
 sweep_pareto.py             the MENU MAKER (best design under 6 different priorities)
 architectures.py            double-layer & mirror-based waveguide models + self-tests
-waveguide_visualizer.html   the 2D PLAYGROUND (double-click, drag sliders)
-waveguide_3d.html           the 3D MODEL (rotate/zoom; rebuild with make_3d_model.py)
+waveguide_visualizer.html   the PLAYGROUND (double-click, drag sliders)
 ```
 
 **How training works, one sentence per step:**
-1. Make tens of thousands of random waveguide designs (`sample_theta`).
+1. Make 30,000 random waveguide designs (`sample_theta`).
 2. Score them all with the physics simulator (`forward_model`) → the dataset.
-3. The surrogate net (`ForwardNet`, an 8→256→256→256→256→4 MLP) trains until it
-   predicts the scores itself — check `surrogate_parity.png` for the proof.
-4. The inverse net (`InverseNet`, 4→256×4→8) sees target scores and guesses designs;
-   each guess is pushed through the FROZEN surrogate; the loss is how far the
-   predicted scores land from the requested scores ("tandem" trick — this is what
+3. The neural net (`InverseNet`, an 4→256→256→256→256→8 MLP) sees the scores and
+   guesses the designs.
+4. Each guess is pushed BACK through the physics; the loss is how far the guessed
+   design's *scores* land from the requested scores ("tandem" trick — this is what
    handles many-designs-one-spec ambiguity).
 5. `loss.backward()` computes, via calculus, how to nudge all ~200k network weights;
    `opt.step()` applies the nudge. Repeat per batch, per epoch.
-6. Every epoch it's graded on designs it never trained on, scored by the EXACT
-   physics (validation) — the number that matters.
+6. Every epoch it's graded on 3,000 designs it never trained on (validation) —
+   the number that matters.
 
 ## 2. Run commands (copy-paste)
 
 ```bash
-cd <path to this project folder>     # tip: type "cd ", drag the folder in, Enter
+cd "/Users/connorwang/Claude/Projects/Garden Of Climate/inverseWaveguideDesignPMMA"
 
 python3 waveguide_physics.py                 # sanity check the simulator
-python3 surrogate.py --pmma --quick          # 1-min surrogate smoke test
-python3 surrogate.py --pmma                  # standard surrogate run
-python3 train_inverse.py --pmma --quick      # tandem smoke test (needs surrogate)
-python3 train_inverse.py --pmma              # standard tandem run
+python3 train_inverse.py --pmma --quick      # 1-min smoke test
+python3 train_inverse.py --pmma              # standard run (~1 min)
 python3 train_inverse.py --pmma --samples 100000 --epochs 300 --batch 256 --seed 0
                                              # rigorous run: 117,300 iterations
-python3 train_inverse.py --pmma --decoder physics   # exact-physics ablation
-python3 neural_adjoint.py                    # optimize designs through the network
-python3 optimize_pmma.py                     # non-neural baseline search
+python3 optimize_pmma.py                     # find the optimal design
 python3 sweep_pareto.py                      # trade-off menu + chart
-python3 make_3d_model.py                     # 3D model + STL of the best design
 python3 architectures.py                     # double/geometric models + gate tests
 open loss_curve.png                          # view the training curve
 ```
@@ -63,12 +52,10 @@ report median ± range of "best validation spec-MSE".
 ## 3. Reading the training printout
 
 ```
-ep  12/40 | train loss 0.00092 | val spec-MSE 0.00089 | surr-val 0.00071 | baseline theta-MSE 0.058 | 7s
-    │            │                    │                      │                  │
-    epoch        error on data        error on UNSEEN data   what the surrogate the naive rival
-                 it trains on         scored by EXACT        net BELIEVES       (should stay bad)
-                                      physics (the score     (gap vs val =
-                                      that counts)           surrogate error)
+ep  12/40 | train loss 0.00092 | val spec-MSE 0.00089 | baseline theta-MSE 0.058 | 7s
+    │            │                    │                      │
+    epoch        error on data        error on UNSEEN data   the naive rival
+                 it trains on         (the score that counts) (should stay bad)
 ```
 
 - Both falling → learning. ✔
@@ -90,7 +77,7 @@ Change ONE thing per run, compare `loss_curve.png` before/after. That's the scie
 
 ## 5. Edits INSIDE the code (open the .py file in a text editor)
 
-**Change what "optimal" means** — `neural_adjoint.py` and `optimize_pmma.py`, near the top:
+**Change what "optimal" means** — `optimize_pmma.py`, near the top:
 ```python
 W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # sharpness, brightness, color-fringing penalty
 ```
@@ -132,5 +119,4 @@ Done when the model reproduces Paper 1: PMMA loss 93.64–94.10%, MTF 0.6426–0
 | `No module named numpy/matplotlib` | `pip3 install numpy matplotlib` |
 | `No such file or directory` on cd | drag the folder into Terminal after typing `cd ` |
 | git "index.lock exists" | delete `.git/index.lock` in Finder (Cmd+Shift+. shows hidden files) |
-| `forward_surrogate.pt not found` | run `python3 surrogate.py --pmma` first |
-| anything else | search the full error message online — the first Stack Overflow hit usually has it |
+| anything else | paste the full error to Claude |
