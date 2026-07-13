@@ -114,6 +114,8 @@ FOV_DEG = 20.0                # design half-field angle for the FOV metric
 TIR_SOFTNESS = 0.005          # sigmoid width of the guiding mask (sin space)
 
 # Parameter bounds (min, max) — from Paper 1's literature-reported material ranges
+# NOTE: BOUNDS is mutated in place by use_pmma()/use_full(); FULL_BOUNDS below
+# keeps a pristine copy so the full design space can always be restored.
 BOUNDS = torch.tensor([
     [1.45, 2.20],      # n
     [1e-5, 1e-2],      # alpha (1/mm)
@@ -124,7 +126,9 @@ BOUNDS = torch.tensor([
     [20.0, 400.0],     # depth (nm)
     [0.2, 0.8],        # duty
 ])
+FULL_BOUNDS = BOUNDS.clone()   # pristine copy (BOUNDS is mutated by mode switches)
 LOG_DIMS = (1, 3)  # alpha and Lc are sampled/normalized in log-space
+_FULL_FOV_DEG = 20.0           # default FOV metric angle for the full space
 
 # PMMA-only mode: material params pinned to PMMA's literature range (Nilsen et
 # al., Opt. Express 33, 20051 (2025): n~1.49, RMS roughness ~0.87 nm, long
@@ -149,11 +153,26 @@ def use_pmma():
     window of a n=1.49 single-layer waveguide is only a few degrees wide
     (a direct consequence of FIX-1's guiding inequality), so evaluating at
     20 deg would return an honest-but-uninformative 0 for every design."""
-    global FOV_DEG
+    global FOV_DEG, PMMA_MODE
     BOUNDS.copy_(PMMA_BOUNDS)
     FOV_DEG = 5.0
+    PMMA_MODE = True
     print("[physics] PMMA-only mode: material pinned, geometry free, "
           f"period restricted to RGB-guided window, FOV metric at {FOV_DEG:.0f} deg")
+
+
+PMMA_MODE = False
+
+
+def use_full():
+    """Restore the full material design space (inverse of use_pmma()),
+    including the full-space FOV metric angle. Needed because BOUNDS is
+    mutated in place — without this, a process that once called use_pmma()
+    could never get the full space (or its 20-deg FOV metric) back."""
+    global FOV_DEG, PMMA_MODE
+    BOUNDS.copy_(FULL_BOUNDS)
+    FOV_DEG = _FULL_FOV_DEG
+    PMMA_MODE = False
 
 
 def sample_theta(n_samples: int, generator=None) -> torch.Tensor:
@@ -321,7 +340,8 @@ def _transmission_pol(theta: torch.Tensor, field_deg: float,
     #     only (FIX-5); the out-coupler sees the guided angle by construction.
     phi = 2 * torch.pi * depth * (n - 1.0) / lam_g
     eta = 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
-    s_i = torch.sin(torch.deg2rad(torch.tensor(float(field_deg))))
+    s_i = torch.sin(torch.deg2rad(torch.tensor(float(field_deg),
+                                               device=theta.device)))
     accept = torch.exp(-(s_i / ACCEPT_SIN) ** 2)
     T_grating = (eta * accept) * eta               # in-coupler x out-coupler
 
@@ -391,7 +411,7 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
     # 1) Diffraction-limited eye MTF (Watson 2013 form), green
     lam_mm = 532e-6
     fc = PUPIL_MM / (lam_mm * EYE_FL_MM)   # diffraction cutoff, cyc/mm
-    xx = torch.tensor(min(f / fc, 0.999))
+    xx = torch.tensor(min(f / fc, 0.999), device=theta.device)
     mtf_diff = (2 / torch.pi) * (torch.acos(xx) - xx * torch.sqrt(1 - xx ** 2))
     mtf_diff = mtf_diff * torch.ones_like(n)
 
