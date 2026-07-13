@@ -27,7 +27,9 @@ def occ_srg_nl(slant_deg, duty, depth, period, nl):
 
 
 def best_srg_params():
-    with open("metagrating_results.csv") as f:
+    import os
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "metagrating_results.csv")) as f:
         rows = [r for r in csv.DictReader(f) if r["arm"] == "SRG"]
     best = max(rows, key=lambda r: float(r["eta_TE_bin"]))
     return json.loads(best["params_json"])
