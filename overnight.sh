@@ -26,8 +26,8 @@ HOURS=${HOURS:-12}            # minimum total runtime in hours
 SAMPLES=${SAMPLES:-150000}    # training-set size per run
 SUR_EPOCHS=${SUR_EPOCHS:-250} # surrogate epochs per seed
 INV_EPOCHS=${INV_EPOCHS:-400} # inverse-network epochs per seed
-NA_STARTS=${NA_STARTS:-2000}  # neural-adjoint parallel starting designs
-NA_STEPS=${NA_STEPS:-1500}    # neural-adjoint gradient steps
+NA_STARTS=${NA_STARTS:-4000}  # neural-adjoint parallel starting designs
+NA_STEPS=${NA_STEPS:-600}     # gradient steps (measured: converges by ~400)
 SEEDS=${SEEDS:-"0 1 2 3 4"}   # paper protocol: 5 seeds
 LOG=overnight_log.txt
 T0=$(date +%s)
@@ -54,10 +54,14 @@ for SEED in $SEEDS; do
     >> "$LOG" 2>&1
 done
 
-mark "stage 3/6: ablation (tandem through exact physics)"
-$CAF python3 networks/train_inverse.py --pmma --decoder physics \
-  --samples "$SAMPLES" --epochs "$INV_EPOCHS" --batch 256 --seed 0 \
-  >> "$LOG" 2>&1
+# full 5-seed ablation so the physics-decoder arm has the same statistical
+# weight as the surrogate arm in the paper's comparison table
+for SEED in $SEEDS; do
+  mark "stage 3/6: ablation (tandem through exact physics) seed $SEED"
+  $CAF python3 networks/train_inverse.py --pmma --decoder physics \
+    --samples "$SAMPLES" --epochs "$INV_EPOCHS" --batch 256 --seed "$SEED" \
+    >> "$LOG" 2>&1
+done
 
 mark "stage 4/6: design search (neural adjoint + baselines)"
 $CAF python3 networks/neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" >> "$LOG" 2>&1
