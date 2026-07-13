@@ -37,7 +37,12 @@ from metagrating_model import (
 )
 import metagrating_dashboard as dash
 
-RESULTS_CSV = "metagrating_results.csv"
+# anchor all outputs to this folder — previously they were CWD-relative, so
+# running `python3 metagrating/optimize_metagrating.py` from the project root
+# scattered result files at the root instead of updating the ones in here
+_HERE = os.path.dirname(os.path.abspath(__file__))
+RESULTS_CSV = os.path.join(_HERE, "metagrating_results.csv")
+BEST_TOPO_JSON = os.path.join(_HERE, "metagrating_best_topo.json")
 
 
 # --------------------------- shared reporting --------------------------------
@@ -178,7 +183,7 @@ def run_topo(period, seed=0, start=0, n_iters=300, nG=NG_DEFAULT, lr=0.05,
     for mname in ("eta_TE", "eta_TM", "eta_unpol"):
         hit |= dash.record(mname, rep[mname], "topology", params)
     if hit:
-        with open("metagrating_best_topo.json", "w") as f:
+        with open(BEST_TOPO_JSON, "w") as f:
             json.dump({"occupancy": occ_b.tolist(), "period_nm": period,
                        "report": rep, "params": params}, f)
     append_result(["topology", f"{period:.2f}", seed, start,
