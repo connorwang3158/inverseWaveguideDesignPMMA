@@ -10,7 +10,8 @@ this — we run gradient ASCENT on the design parameters themselves, from many
 random starting points (multi-start avoids local optima), maximizing a weighted
 objective:
 
-    J = w_mtf * MTF  +  w_T * (T / 0.10)  -  w_ca * (chrom_spread / 30 deg)
+    J = w_mtf * MTF + w_T * (T / 0.10) + 0.3 * (T_fov / 0.10)
+        - w_ca * (chrom_spread / 30 deg) - W_TIR * tir_penalty
 
 Weights encode the design priorities; sweep them to trace the trade-off frontier
 (the Pareto front) — that trade-off curve is a headline figure for the paper.
@@ -73,7 +74,11 @@ def optimize():
         y = forward_model(theta)
         top = torch.topk(J, k=5).indices
 
-    pol = transmission_polarized(theta)
+    # polarization split evaluated at the FOV field angle: at normal incidence
+    # TE and TM are identical by symmetry, so the previous 0-deg report always
+    # printed diattenuation 0.000 — true but uninformative
+    from physics.waveguide_physics import FOV_DEG
+    pol = transmission_polarized(theta, field_deg=FOV_DEG)
     fov_lo, fov_hi, fov_w = fov_window_deg(theta)
 
     print("\n=== Top 5 optimal PMMA designs ===")
@@ -81,7 +86,8 @@ def optimize():
         mtf, T, ca, T_fov = y[i].tolist()
         print(f"\n#{rank}  J={J[i]:.4f} | MTF {mtf:.4f} | T {100*T:.2f}% | "
               f"chrom {ca:.2f} deg | T@FOV {100*T_fov:.2f}%")
-        print(f"    T_TE {100*pol['TE'][i]:.2f}%  T_TM {100*pol['TM'][i]:.2f}%  "
+        print(f"    at {FOV_DEG:.0f} deg field: T_TE {100*pol['TE'][i]:.2f}%  "
+              f"T_TM {100*pol['TM'][i]:.2f}%  "
               f"diattenuation {pol['diattenuation'][i]:.3f}")
         print(f"    full-RGB guided FOV window: [{fov_lo[i]:.1f}, {fov_hi[i]:.1f}] deg "
               f"(width {fov_w[i]:.1f} deg)")
@@ -93,7 +99,8 @@ def optimize():
     with open(res_path("optimal_designs.csv"), "w", newline="") as f:
         wcsv = csv.writer(f)
         wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov",
-                       "T_TE", "T_TM", "fov_lo_deg", "fov_hi_deg"] + LABELS)
+                       "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
+                      + LABELS)
         for rank, i in enumerate(top, 1):
             wcsv.writerow([rank, f"{J[i]:.4f}"] +
                           [f"{v:.5g}" for v in y[i].tolist()] +
