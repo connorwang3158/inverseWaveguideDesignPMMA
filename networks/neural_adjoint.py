@@ -105,9 +105,11 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
           f"mean {gap.mean():.4f} | worst {gap.max():.4f}")
 
     # physical validity flag: all RGB first orders inside the guiding window
-    # 1 < sin(theta_i)+lambda/period < n (the v2 engine's FIX-1 inequality,
-    # via its differentiable penalty — zero penalty means fully guided)
-    tir_ok = tir_penalty(theta) <= 0.0
+    # 1 < sin(theta_i)+lambda/period < n (the v2 engine's FIX-1 inequality).
+    # Uses margin=0 — the PHYSICAL window — not the optimizer's 0.01 safety
+    # margin, which previously flagged genuinely guided designs near the
+    # window edge (e.g. blue at period 449 nm) as unguided (false negatives).
+    tir_ok = tir_penalty(theta, margin=0.0) <= 0.0
 
     top = torch.topk(J_phys, k=topk).indices   # rank by TRUE physics, not belief
     print(f"\n=== Top {topk} designs (found by the network, verified by physics) ===")
@@ -124,7 +126,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
         wcsv = csv.writer(f)
         wcsv.writerow(["rank", "J_physics", "J_surrogate",
                        "MTF", "T", "chrom_deg", "T_fov"] + LABELS +
-                      ["tir_guided_green"])
+                      ["tir_guided_rgb"])
         for rank, i in enumerate(top, 1):
             wcsv.writerow([rank, f"{J_phys[i]:.4f}", f"{J_surr[i]:.4f}"] +
                           [f"{v:.5g}" for v in y_phys[i].tolist()] +
