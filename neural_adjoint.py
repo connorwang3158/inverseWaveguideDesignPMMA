@@ -26,8 +26,9 @@ Usage:
 Outputs:
     optimal_designs_na.csv       top designs (surrogate-found, physics-verified)
     neural_adjoint_run.png       search trajectory + surrogate-vs-physics parity
-    best_design_ever.csv         all-time hall of fame (physics-scored, shared
-                                 with optimize_pmma.py)
+    best_design_ever_v2.csv      all-time hall of fame (physics-scored, shared
+                                 with optimize_pmma.py; v2 = records under the
+                                 corrected TIR-constrained physics)
 """
 
 import argparse
@@ -39,11 +40,14 @@ import torch
 
 from waveguide_physics import (
     SPEC_SCALE, forward_model, sample_theta, normalize_theta,
-    denormalize_theta,
+    denormalize_theta, tir_penalty,
 )
 from surrogate import load_surrogate
 
 W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # objective weights (match optimize_pmma.py)
+W_TIR = 10.0   # TIR-feasibility penalty weight (FIX-1) — same as optimize_pmma,
+               # so the two methods maximize the SAME objective and their hall-
+               # of-fame scores are directly comparable
 
 LABELS = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
           "period(nm)", "depth(nm)", "duty"]
@@ -75,7 +79,9 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     for step in range(n_steps):
         z = torch.sigmoid(w)
         y_pred = surr(z) * SPEC_SCALE          # network prediction, physical units
-        J = objective_from_spec(y_pred)
+        # TIR penalty comes from the design itself (not the surrogate), keeping
+        # the search inside the guiding window exactly like optimize_pmma.py
+        J = objective_from_spec(y_pred) - W_TIR * tir_penalty(denormalize_theta(z))
         opt.zero_grad(); (-J.sum()).backward(); opt.step()
         traj.append(J.max().item())
         if step % 100 == 0:
@@ -87,24 +93,24 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
         theta = denormalize_theta(z)
         y_surr = surr(z) * SPEC_SCALE
         y_phys = forward_model(theta)
-        J_surr = objective_from_spec(y_surr)
-        J_phys = objective_from_spec(y_phys)
+        pen = W_TIR * tir_penalty(theta)
+        J_surr = objective_from_spec(y_surr) - pen
+        J_phys = objective_from_spec(y_phys) - pen
 
     gap = (J_surr - J_phys).abs()
     print(f"\nsurrogate-vs-physics J gap over {n_starts} finalists: "
           f"mean {gap.mean():.4f} | worst {gap.max():.4f}")
 
-    # physical validity flag: is the green first-order actually TIR-guided?
-    # (n sin(theta) = lambda/period must exceed 1, i.e. period < 532 nm for
-    # green — the analytic engine's fixed bounce count does NOT enforce this,
-    # so search methods can wander into leaky territory; flag it honestly)
-    tir_ok = (532.0 / theta[:, 5]) > 1.0
+    # physical validity flag: all RGB first orders inside the guiding window
+    # 1 < sin(theta_i)+lambda/period < n (the v2 engine's FIX-1 inequality,
+    # via its differentiable penalty — zero penalty means fully guided)
+    tir_ok = tir_penalty(theta) <= 0.0
 
     top = torch.topk(J_phys, k=topk).indices   # rank by TRUE physics, not belief
     print(f"\n=== Top {topk} designs (found by the network, verified by physics) ===")
     for rank, i in enumerate(top, 1):
         mtf, T, ca, T_fov = y_phys[i].tolist()
-        guided = "yes" if tir_ok[i] else "NO (leaky — see README caveat)"
+        guided = "yes" if tir_ok[i] else "NO (outside TIR guiding window)"
         print(f"\n#{rank}  J={J_phys[i]:.4f} (network believed {J_surr[i]:.4f}) | "
               f"MTF {mtf:.4f} | T {100*T:.2f}% | chrom {ca:.2f} deg | "
               f"T@FOV {100*T_fov:.2f}% | TIR-guided: {guided}")
@@ -123,8 +129,10 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
                           [int(tir_ok[i])])
     print("\nSaved winners -> optimal_designs_na.csv")
 
-    # hall of fame (shared with optimize_pmma.py): physics-scored record only
-    hof, prev_J = "best_design_ever.csv", -1e9
+    # hall of fame (shared with optimize_pmma.py): physics-scored record only.
+    # v2 = records under the corrected (TIR-constrained, polarization-resolved)
+    # physics; v1 records were set by leaky designs and are not comparable.
+    hof, prev_J = "best_design_ever_v2.csv", -1e9
     if os.path.exists(hof):
         with open(hof) as f:
             try:

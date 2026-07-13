@@ -52,34 +52,55 @@ Then double-click **`results_report.html`** (all tables + charts) and
 
 `--quick` runs are small smoke tests. Drop the flag for real runs.
 
-## 3. Training overnight (the real runs)
+## 3. Training overnight (the real runs — guaranteed 12+ hours)
 
-One command starts the whole pipeline — 5 surrogate seeds, 5 inverse-network
-seeds, the ablation run, the design searches, and all figures:
+One command starts the whole pipeline and **keeps working until at least 12
+hours have passed**:
 
 ```bash
 bash overnight.sh
 ```
 
+What the night looks like (these markers appear in `overnight_log.txt`):
+
+```
+stage 1/6: surrogate seed 0..4       train the physics-learning network, 5 seeds
+stage 2/6: inverse ... seed 0..4     train the designer network THROUGH it, 5 seeds
+stage 3/6: ablation                  same training through exact physics (paper table)
+stage 4/6: design search             neural adjoint + gradient/Pareto baselines
+stage 5/6: figures, 3D model, report
+stage 6/6: bonus lap, seed 5, 6, …   one extra seed + record hunt per lap,
+                                     repeating until the 12 h budget is spent
+```
+
 - Keep the laptop **plugged in** with the **lid open**. On a Mac the script
   automatically uses `caffeinate` so the machine won't fall asleep.
-- It is a LONG night — the 5+5 seed protocol can take 10+ hours on a laptop
-  CPU. If morning arrives first, it's fine: every finished seed is already
-  saved. You can also shorten the night by editing the `--epochs` or the seed
-  lists at the top of `overnight.sh`.
-- Watch live progress from a second terminal tab:
+- Want a different night length? `HOURS=16 bash overnight.sh` (or `HOURS=0`
+  for the core protocol only, no bonus laps).
+- Watch live progress from a second terminal tab (the first tab stays quiet
+  on purpose — everything is written to the log):
 
   ```bash
   tail -f overnight_log.txt
   ```
 
-- In the morning, open `results_report.html`. Everything is also saved as
-  CSVs, so nothing is lost if you close the page.
+- New records print `NEW RECORD` in the log and land in
+  `best_design_ever_v2.csv` (stage 4 onward, then once per bonus lap).
+- In the morning, open `results_report.html` — it is rebuilt after every
+  bonus lap, so it is always current. Everything is also saved as CSVs, so
+  nothing is lost if you close the page.
 
-If the run is interrupted, just run `bash overnight.sh` again — checkpoints
-named `*_seed0.pt` etc. are kept per run, and the best-ever files
-(`forward_surrogate.pt`, `best_design_ever.csv`) only update when a new run
-actually beats the record.
+If the run is interrupted, just run `bash overnight.sh` again — per-seed
+checkpoints are kept, and the best-ever files (`forward_surrogate.pt`,
+`best_design_ever_v2.csv`) only update when a new run actually beats the
+record.
+
+**If you edit `waveguide_physics.py`**, the pipeline notices by itself: every
+surrogate checkpoint stores a fingerprint of the physics it learned from, and
+the next training run replaces any checkpoint whose fingerprint no longer
+matches (scripts that need the surrogate refuse stale checkpoints with a clear
+message instead of silently using them). Records from a previous physics
+engine belong in `archive_old_physics/`, not mixed into the live tables.
 
 ## 4. What each file means
 
@@ -87,7 +108,7 @@ actually beats the record.
 |---|---|---|
 | `surrogate.py` | `forward_surrogate.pt`, `surrogate_loss_curve.png`, `surrogate_parity.png`, `surrogate_runs.csv` | The trained physics-emulator network + proof of how well it learned (parity plot: predictions vs truth; R² near 1.0 = learned) |
 | `train_inverse.py` | `inverse_model_seed*.pt`, `loss_curve.png`, `training_runs.csv` | The trained designer network + its learning curve |
-| `neural_adjoint.py` | `optimal_designs_na.csv`, `neural_adjoint_run.png`, `best_design_ever.csv` | Best designs found by searching through the network, verified with exact physics |
+| `neural_adjoint.py` | `optimal_designs_na.csv`, `neural_adjoint_run.png`, `best_design_ever_v2.csv` | Best designs found by searching through the network, verified with exact physics |
 | `optimize_pmma.py`, `sweep_pareto.py` | `optimal_designs.csv`, `pareto_*.{csv,png}` | Non-neural baselines the paper compares against |
 | `make_3d_model.py` | `waveguide_3d.html`, `waveguide_model.stl` | Interactive 3D model + a mesh file any 3D viewer/printer opens |
 | `make_report.py` | `results_report.html` | One page with every table and figure |
@@ -134,6 +155,7 @@ range of "best validation spec-MSE" from `training_runs.csv` /
 | `No module named torch` | `pip3 install torch` |
 | `No module named numpy/matplotlib` | `pip3 install numpy matplotlib` |
 | `forward_surrogate.pt not found` | run `python3 surrogate.py --pmma` first — the other scripts need the trained surrogate |
+| `trained under a DIFFERENT waveguide_physics.py` | the physics engine changed since the surrogate was trained; retrain with `python3 surrogate.py --pmma` (the overnight script does this automatically) |
 | `No such file or directory` on `cd` | type `cd `, drag the project folder into the terminal, Enter |
-| 3D page is black | it needs internet once to fetch the graphics library; offline, open `waveguide_model.stl` instead |
+| 3D page won't load | the viewer is fully self-contained (no internet needed) — try another browser, or open `waveguide_model.stl` in any 3D viewer instead |
 | Overnight run died partway | rerun `bash overnight.sh` — records only improve, never regress |

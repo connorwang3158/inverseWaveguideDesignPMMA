@@ -2,7 +2,7 @@
 Build a viewable 3D model of the current best PMMA waveguide design.
 
 Reads the winning design (optimal_designs_na.csv from the neural-adjoint
-search, falling back to best_design_ever.csv, falling back to sensible
+search, falling back to best_design_ever_v2.csv, falling back to sensible
 defaults), then writes:
 
   waveguide_3d.html    interactive 3D viewer — rotate/zoom with the mouse,
@@ -40,7 +40,7 @@ def load_best_design():
     """Pull the winning design out of the result CSVs, if any exist."""
     cols = {"t_mm": "t(mm)", "period_nm": "period(nm)",
             "depth_nm": "depth(nm)", "duty": "duty", "n": "n"}
-    for path in ("optimal_designs_na.csv", "best_design_ever.csv"):
+    for path in ("optimal_designs_na.csv", "best_design_ever_v2.csv"):
         if not os.path.exists(path):
             continue
         with open(path) as f:

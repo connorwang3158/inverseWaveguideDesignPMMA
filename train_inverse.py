@@ -1,16 +1,23 @@
 """
-Physics-anchored tandem inverse design of AR waveguides.
+Tandem inverse design of AR waveguides (Liu et al., ACS Photonics 2018).
 
 Inverse network g: target spec y* (4) -> design theta_hat (8, via sigmoid -> bounds).
-Loss is computed in SPEC space through the frozen differentiable physics engine:
+Loss is computed in SPEC space through a frozen decoder f:
     L = || f(g(y*)) - y* ||^2  (normalized per-metric)
-This sidesteps design non-uniqueness (one-to-many y->theta), the classic tandem trick,
-but with EXACT physics as the decoder instead of a learned surrogate.
+This sidesteps design non-uniqueness (one-to-many y->theta), the classic tandem trick.
+
+Two decoders, selected with --decoder:
+    surrogate  (default)  the TRAINED forward network from surrogate.py — the
+                          standard tandem recipe of the cited literature; run
+                          `python3 surrogate.py --pmma` first
+    physics               the exact differentiable physics engine — this
+                          project's ablation arm for the paper's comparison
+Validation is ALWAYS scored by the exact physics, whichever decoder trains.
 
 Also trains a naive direct-regression baseline (y -> theta with theta-space MSE)
 to demonstrate the non-uniqueness failure mode for the paper's baseline table.
 
-Usage:  python3 train_inverse.py [--quick]
+Usage:  python3 train_inverse.py --pmma [--decoder surrogate|physics] [--quick]
 """
 
 import argparse
@@ -50,9 +57,23 @@ def make_dataset(n: int, seed: int = 0):
 
 
 def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
-          seed=0):
+          seed=0, decoder="surrogate"):
     if quick:
         n_train, n_val, epochs = 6000, 1000, 8
+
+    # frozen decoder for the tandem loss. The surrogate loader also restores
+    # the design space it was trained in, so build it BEFORE the datasets.
+    if decoder == "surrogate":
+        from surrogate import load_surrogate
+        surr = load_surrogate()
+
+        def decode(z_hat):           # both nets live in normalized spaces
+            return surr(z_hat)
+        print("decoder: frozen trained surrogate (tandem recipe of the cited papers)")
+    else:
+        def decode(z_hat):
+            return normalize_spec(forward_model(denormalize_theta(z_hat)))
+        print("decoder: exact differentiable physics (ablation arm)")
 
     steps_per_epoch = (n_train + batch - 1) // batch
     print(f"config: {n_train} samples | {epochs} epochs | batch {batch} | "
@@ -82,10 +103,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
             idx = perm[i:i + batch]
             yb = y_tr_n[idx]
 
-            # --- tandem: spec-space loss through frozen physics
+            # --- tandem: spec-space loss through the frozen decoder
             z_hat = model(yb)
-            theta_hat = denormalize_theta(z_hat)
-            y_hat = normalize_spec(forward_model(theta_hat))
+            y_hat = decode(z_hat)
             loss = nn.functional.mse_loss(y_hat, yb)
             opt.zero_grad(); loss.backward(); opt.step()
             tot += loss.item() * len(idx)
@@ -113,9 +133,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
 
     if best_state is not None:
         model.load_state_dict(best_state)  # report/save the best epoch, not the last
-    print(f"\nbest validation spec-MSE: {best_va:.6f}")
+    print(f"\nbest validation spec-MSE (exact physics): {best_va:.6f}")
     torch.save({"model": model.state_dict(), "baseline": baseline.state_dict(),
-                "best_val": best_va, "seed": seed},
+                "best_val": best_va, "seed": seed, "decoder": decoder},
                f"inverse_model_seed{seed}.pt")
     print(f"Saved weights -> inverse_model_seed{seed}.pt")
 
@@ -125,9 +145,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
     with open("training_runs.csv", "a", newline="") as f:
         wcsv = csv.writer(f)
         if new:
-            wcsv.writerow(["seed", "samples", "epochs", "batch", "lr",
-                           "iterations", "best_val_specMSE"])
-        wcsv.writerow([seed, n_train, epochs, batch, lr,
+            wcsv.writerow(["seed", "decoder", "samples", "epochs", "batch",
+                           "lr", "iterations", "best_val_specMSE"])
+        wcsv.writerow([seed, decoder, n_train, epochs, batch, lr,
                        steps_per_epoch * epochs, f"{best_va:.6f}"])
     print("Appended run summary -> training_runs.csv")
 
@@ -191,9 +211,14 @@ if __name__ == "__main__":
     p.add_argument("--batch", type=int, default=512, help="batch size")
     p.add_argument("--lr", type=float, default=1e-3, help="learning rate")
     p.add_argument("--seed", type=int, default=0, help="random seed (run >=5 seeds for paper)")
+    p.add_argument("--decoder", choices=["surrogate", "physics"],
+                   default="surrogate",
+                   help="tandem decoder: trained surrogate network (default) "
+                        "or exact physics (ablation)")
     args = p.parse_args()
     if args.pmma:
         use_pmma()
     m = train(n_train=args.samples, epochs=args.epochs, batch=args.batch,
-              lr=args.lr, quick=args.quick, seed=args.seed)
+              lr=args.lr, quick=args.quick, seed=args.seed,
+              decoder=args.decoder)
     demo_reverse_engineering(m)

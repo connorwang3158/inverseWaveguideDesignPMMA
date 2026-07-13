@@ -9,12 +9,18 @@ import os
 from datetime import datetime
 
 FILES = [
-    ("Training runs (5-seed protocol table)", "training_runs.csv"),
-    ("Optimal designs (gradient search winners)", "optimal_designs.csv"),
+    ("Forward surrogate runs (physics-learning table)", "surrogate_runs.csv"),
+    ("Inverse-network training runs (5-seed protocol table)", "training_runs.csv"),
+    ("Neural-adjoint winners (network-found, physics-verified)", "optimal_designs_na.csv"),
+    ("All-time best design (corrected physics)", "best_design_ever_v2.csv"),
+    ("Optimal designs (gradient-baseline winners)", "optimal_designs.csv"),
     ("Trade-off sweep (priority menu)", "pareto_results.csv"),
     ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
 ]
-IMAGES = [("Training curve", "loss_curve.png"),
+IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
+          ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
+          ("Inverse-network training curve", "loss_curve.png"),
+          ("Neural-adjoint search", "neural_adjoint_run.png"),
           ("Trade-off frontier", "pareto_front.png")]
 
 
@@ -45,6 +51,15 @@ after any experiment to refresh.</p>"""]
         parts.append(f"<h2>{title}</h2>")
         parts.append(f"<img src='{path}'>" if os.path.exists(path)
                      else f"<p class='miss'>{path} not found.</p>")
+    parts.append("<h2>3D model</h2>")
+    if os.path.exists("waveguide_3d.html"):
+        parts.append("<p>Open <a href='waveguide_3d.html'>waveguide_3d.html</a> "
+                     "to rotate the winning waveguide in 3D (drag to rotate, "
+                     "scroll to zoom). A printable mesh is in "
+                     "<code>waveguide_model.stl</code>.</p>")
+    else:
+        parts.append("<p class='miss'>waveguide_3d.html not found — run "
+                     "python3 make_3d_model.py.</p>")
     parts.append("</body></html>")
     with open("results_report.html", "w") as f:
         f.write("\n".join(parts))

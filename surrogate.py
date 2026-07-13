@@ -38,7 +38,7 @@ import torch.nn as nn
 
 from waveguide_physics import (
     BOUNDS, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
-    normalize_spec, use_pmma,
+    normalize_spec, denormalize_theta, use_pmma,
 )
 
 SPEC_NAMES = ["MTF@40cyc/mm", "Transmission", "ChromSpread(deg)", "T@FOV"]
@@ -74,15 +74,44 @@ def make_dataset(n: int, seed: int):
     return normalize_theta(theta), y_n
 
 
+def physics_probe() -> torch.Tensor:
+    """Spec of 64 fixed probe designs under the CURRENT physics + bounds.
+    Stored in every checkpoint: a surrogate is only valid while the live
+    waveguide_physics.py reproduces its stored probe. This catches physics
+    revisions (like the 2026-07 TIR fix) that silently invalidate a trained
+    surrogate — a surrogate trained on old-physics labels confidently steers
+    searches into designs the corrected physics rejects."""
+    g = torch.Generator().manual_seed(1234)
+    z = torch.rand(64, 8, generator=g)
+    with torch.no_grad():
+        return forward_model(denormalize_theta(z))
+
+
+def _probe_matches(probe_saved, probe_now) -> bool:
+    return (probe_saved is not None
+            and torch.allclose(probe_now, probe_saved, rtol=1e-4, atol=1e-6))
+
+
 def load_surrogate(path: str = "forward_surrogate.pt") -> ForwardNet:
-    """Load a trained surrogate AND restore the design bounds it was trained
-    with (PMMA vs full space), so input normalization matches training."""
+    """Load a trained surrogate AND restore the design space it was trained in
+    (PMMA vs full, including the PMMA FOV metric angle), so every downstream
+    consumer scores physics exactly as the surrogate saw it in training.
+    Refuses checkpoints whose stored physics probe no longer matches the live
+    physics engine — those predictions are stale and must be retrained."""
     if not os.path.exists(path):
         raise SystemExit(
             f"{path} not found — train the forward surrogate first:\n"
             f"    python3 surrogate.py --pmma")
     ck = torch.load(path, weights_only=True)
+    if ck.get("pmma"):
+        use_pmma()          # restores PMMA FOV angle as well as the bounds
     BOUNDS.copy_(ck["bounds"])
+    if not _probe_matches(ck.get("probe_spec"), physics_probe()):
+        raise SystemExit(
+            f"{path} was trained under a DIFFERENT waveguide_physics.py than "
+            f"the current one — its learned physics is stale and would steer "
+            f"every search into invalid designs.\n"
+            f"Retrain first:  python3 surrogate.py --pmma")
     net = ForwardNet(hidden=ck["hidden"], depth=ck["depth"])
     net.load_state_dict(ck["model"])
     net.eval()
@@ -163,23 +192,29 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
         print(f"  {nm:18s} R^2 {r:.5f}   MAE {a:.5f} (physical units)")
     print(f"  best validation MSE: {best_va:.6f}")
 
+    probe = physics_probe()
     ckpt = {"model": model.state_dict(), "hidden": model.hidden,
             "depth": model.depth, "bounds": BOUNDS.clone(), "pmma": pmma,
-            "best_val": best_va, "seed": seed,
+            "best_val": best_va, "seed": seed, "probe_spec": probe,
             "r2": r2.tolist(), "n_train": n_train, "epochs": epochs}
     torch.save(ckpt, f"forward_surrogate_seed{seed}.pt")
     print(f"Saved weights -> forward_surrogate_seed{seed}.pt")
 
     # keep forward_surrogate.pt = the best surrogate ever trained in this space
+    # AND under the current physics — a checkpoint from an older physics engine
+    # is stale regardless of its val score, so it is always replaced.
     keep_old = False
     if os.path.exists("forward_surrogate.pt"):
         old = torch.load("forward_surrogate.pt", weights_only=True)
-        keep_old = old.get("pmma") == pmma and old["best_val"] <= best_va
+        keep_old = (old.get("pmma") == pmma
+                    and _probe_matches(old.get("probe_spec"), probe)
+                    and old["best_val"] <= best_va)
     if keep_old:
         print("forward_surrogate.pt kept (existing checkpoint is better)")
     else:
         torch.save(ckpt, "forward_surrogate.pt")
-        print("forward_surrogate.pt updated (new best for this design space)")
+        print("forward_surrogate.pt updated (new best for this design space "
+              "under the current physics)")
 
     new = not os.path.exists("surrogate_runs.csv")
     with open("surrogate_runs.csv", "a", newline="") as f:

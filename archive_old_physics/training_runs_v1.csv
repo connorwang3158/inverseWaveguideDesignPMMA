@@ -1,0 +1,3 @@
+seed,decoder,samples,epochs,batch,lr,iterations,best_val_specMSE
+0,surrogate,30000,40,512,0.001,2360,0.000034
+0,physics,6000,8,512,0.001,96,0.002267

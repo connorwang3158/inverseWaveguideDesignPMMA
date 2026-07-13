@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 overnight_log.txt
 forward_surrogate_seed*.pt
+.DS_Store
