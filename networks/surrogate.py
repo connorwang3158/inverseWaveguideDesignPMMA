@@ -41,8 +41,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import ckpt_path, fig_path, res_path
 from physics.waveguide_physics import (
     BOUNDS, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
-    normalize_spec, denormalize_theta, use_pmma,
+    normalize_spec, denormalize_theta, use_pmma, use_full,
 )
+
+# Fixed dataset seeds. Training data uses TRAIN_SEED_BASE + seed, which can
+# never collide with the validation/test seeds below (previously the training
+# seed was 100+seed, so --seed 100 made the training set IDENTICAL to the
+# validation set, and --seed 200 identical to the test set — silent leakage).
+VAL_SEED, TEST_SEED = 200, 300
+TRAIN_SEED_BASE = 1000
+# fixed-size comparison set for the "best checkpoint ever" decision (see train)
+CMP_SEED, CMP_N = 200, 5000
 
 SPEC_NAMES = ["MTF@40cyc/mm", "Transmission", "ChromSpread(deg)", "T@FOV"]
 
@@ -110,6 +119,10 @@ def load_surrogate(path: str = None) -> ForwardNet:
     ck = torch.load(path, weights_only=True)
     if ck.get("pmma"):
         use_pmma()          # restores PMMA FOV angle as well as the bounds
+    else:
+        use_full()          # restore full-space bounds AND the 20-deg FOV
+                            # metric (a prior use_pmma() call would otherwise
+                            # leave the FOV angle at 5 deg — silent mismatch)
     BOUNDS.copy_(ck["bounds"])
     if not _probe_matches(ck.get("probe_spec"), physics_probe()):
         raise SystemExit(
@@ -128,6 +141,18 @@ def load_surrogate(path: str = None) -> ForwardNet:
     return net
 
 
+@torch.no_grad()
+def _comparison_mse(model: ForwardNet) -> float:
+    """UNWEIGHTED spec-MSE on a fixed 5000-sample comparison set (seed 200,
+    current bounds/physics). Used for the 'best checkpoint ever' decision:
+    the training-time best_val is a WEIGHTED MSE whose per-metric weights
+    depend on each run's training data, so best_val values from different
+    runs are not comparable — this metric is."""
+    z, y = make_dataset(CMP_N, seed=CMP_SEED)
+    model.eval()
+    return nn.functional.mse_loss(model(z), y).item()
+
+
 def r2_per_metric(y_pred: torch.Tensor, y_true: torch.Tensor) -> torch.Tensor:
     ss_res = ((y_pred - y_true) ** 2).sum(dim=0)
     ss_tot = ((y_true - y_true.mean(dim=0)) ** 2).sum(dim=0)
@@ -144,10 +169,12 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
     print(f"config: {n_train} samples | {epochs} epochs | batch {batch} | "
           f"lr {lr} | seed {seed} -> {steps_per_epoch * epochs:,} iterations")
 
+    if seed < 0:
+        raise SystemExit("--seed must be >= 0 (keeps dataset seeds disjoint)")
     torch.manual_seed(seed)
-    z_tr, y_tr = make_dataset(n_train, seed=100 + seed)
-    z_va, y_va = make_dataset(n_val, seed=200)
-    z_te, y_te = make_dataset(n_test, seed=300)
+    z_tr, y_tr = make_dataset(n_train, seed=TRAIN_SEED_BASE + seed)
+    z_va, y_va = make_dataset(n_val, seed=VAL_SEED)
+    z_te, y_te = make_dataset(n_test, seed=TEST_SEED)
 
     # inverse-spread loss weights: in PMMA mode some metrics (e.g. MTF) span
     # a narrow range; without this the network ignores them and their R^2 dies.
@@ -198,23 +225,33 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
     print(f"  best validation MSE: {best_va:.6f}")
 
     probe = physics_probe()
+    cmp_val = _comparison_mse(model)
+    print(f"  comparison MSE (fixed set, unweighted): {cmp_val:.6f}")
     ckpt = {"model": model.state_dict(), "hidden": model.hidden,
             "depth": model.depth, "bounds": BOUNDS.clone(), "pmma": pmma,
-            "best_val": best_va, "seed": seed, "probe_spec": probe,
+            "best_val": best_va, "cmp_val": cmp_val, "seed": seed,
+            "probe_spec": probe,
             "r2": r2.tolist(), "n_train": n_train, "epochs": epochs}
     torch.save(ckpt, ckpt_path(f"forward_surrogate_seed{seed}.pt"))
     print(f"Saved weights -> checkpoints/forward_surrogate_seed{seed}.pt")
 
     # keep forward_surrogate.pt = the best surrogate ever trained in this space
     # AND under the current physics — a checkpoint from an older physics engine
-    # is stale regardless of its val score, so it is always replaced.
+    # is stale regardless of its val score, so it is always replaced. The
+    # comparison uses the fixed-set UNWEIGHTED MSE (comparable across runs);
+    # old checkpoints without a stored cmp_val are re-scored on the fly.
     best_pt = ckpt_path("forward_surrogate.pt")
     keep_old = False
     if os.path.exists(best_pt):
         old = torch.load(best_pt, weights_only=True)
-        keep_old = (old.get("pmma") == pmma
-                    and _probe_matches(old.get("probe_spec"), probe)
-                    and old["best_val"] <= best_va)
+        if (old.get("pmma") == pmma
+                and _probe_matches(old.get("probe_spec"), probe)):
+            old_cmp = old.get("cmp_val")
+            if old_cmp is None:            # legacy checkpoint: score it now
+                old_net = ForwardNet(hidden=old["hidden"], depth=old["depth"])
+                old_net.load_state_dict(old["model"])
+                old_cmp = _comparison_mse(old_net)
+            keep_old = old_cmp <= cmp_val
     if keep_old:
         print("checkpoints/forward_surrogate.pt kept (existing checkpoint is better)")
     else:
