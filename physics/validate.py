@@ -123,15 +123,20 @@ def v9_brewster():
     th_b = float(np.degrees(np.arctan(N_PMMA)))     # Brewster's angle
     T_tm = fresnel_T(n, th_b, "TM")
     err = abs(T_tm.item() - 1.0)                     # R_TM(th_B) = 0 -> T = 1
-    # unpolarized average identity at 20 deg
+    # unpolarized average identity at a 3-deg field angle
     from waveguide_physics import use_pmma, sample_theta, transmission
     torch.manual_seed(1)
     th = sample_theta(16)
     lhs = transmission(th, 3.0, "unpol")
     rhs = 0.5 * (transmission(th, 3.0, "TE") + transmission(th, 3.0, "TM"))
     avg_err = (lhs - rhs).abs().max().item()
-    check("V9 Brewster + unpol identity", err < 1e-6 and avg_err < 1e-9,
-          f"1-T_TM(th_B) = {err:.2e}; max|T_unpol-(T_TE+T_TM)/2| = {avg_err:.2e}")
+    # TE and TM must DIFFER at oblique incidence (equal at 0 deg by symmetry);
+    # guards against a regression that silently makes the model pol-blind
+    dist = abs(fresnel_T(n, 30.0, "TE").item() - fresnel_T(n, 30.0, "TM").item())
+    check("V9 Brewster + unpol identity",
+          err < 1e-6 and avg_err < 1e-9 and dist > 1e-3,
+          f"1-T_TM(th_B) = {err:.2e}; max|T_unpol-(T_TE+T_TM)/2| = {avg_err:.2e}; "
+          f"|T_TE-T_TM|(30deg) = {dist:.4f} (>0 required)")
 
 
 def v7_gates():
