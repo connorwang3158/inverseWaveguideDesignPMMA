@@ -33,6 +33,8 @@ IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
 def table_html(path):
     with open(path) as f:
         rows = list(csv.reader(f))
+    if not rows:   # empty file (e.g. a run interrupted mid-write) — don't crash
+        return "<p class='miss'>file is empty.</p>"
     head = "".join(f"<th>{c}</th>" for c in rows[0])
     body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
                    for r in rows[1:])
