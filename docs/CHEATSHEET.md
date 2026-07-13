@@ -7,14 +7,16 @@ Everything you need to run, watch, and modify training. Keep this open next to T
 ## 1. How the code works (the 30-second mental model)
 
 ```
-waveguide_physics.py        the SIMULATOR (the "world")
+physics/waveguide_physics.py   the SIMULATOR (the "world")
       theta (8 numbers: material + geometry)  ──►  y (4 scores: MTF, T, chrom, T@FOV)
 
-train_inverse.py            the TRANSLATOR (spec ──► design), learned by a neural net
-optimize_pmma.py            the TREASURE HUNTER (searches for the best design directly)
-sweep_pareto.py             the MENU MAKER (best design under 6 different priorities)
-architectures.py            double-layer & mirror-based waveguide models + self-tests
-waveguide_visualizer.html   the PLAYGROUND (double-click, drag sliders)
+networks/surrogate.py          the STUDENT (a neural net that LEARNS the simulator)
+networks/train_inverse.py      the TRANSLATOR (spec ──► design), learned through the student
+networks/neural_adjoint.py     the TREASURE HUNTER (searches through the trained network)
+baselines/optimize_pmma.py     the RIVAL (searches the physics directly, for comparison)
+baselines/sweep_pareto.py      the MENU MAKER (best design under 6 different priorities)
+physics/architectures.py       double-layer & mirror-based waveguide models + self-tests
+visuals/waveguide_visualizer.html   the PLAYGROUND (double-click, drag sliders)
 ```
 
 **How training works, one sentence per step:**
@@ -33,17 +35,18 @@ waveguide_visualizer.html   the PLAYGROUND (double-click, drag sliders)
 ## 2. Run commands (copy-paste)
 
 ```bash
-cd "/Users/connorwang/Claude/Projects/Garden Of Climate/inverseWaveguideDesignPMMA"
+cd <your project folder>                     # then, from the project root:
 
-python3 waveguide_physics.py                 # sanity check the simulator
-python3 train_inverse.py --pmma --quick      # 1-min smoke test
-python3 train_inverse.py --pmma              # standard run (~1 min)
-python3 train_inverse.py --pmma --samples 100000 --epochs 300 --batch 256 --seed 0
+python3 physics/waveguide_physics.py         # sanity check the simulator
+python3 networks/surrogate.py --pmma --quick # 1-min smoke test (physics learner)
+python3 networks/train_inverse.py --pmma --quick   # 1-min smoke test (designer)
+python3 networks/train_inverse.py --pmma --samples 100000 --epochs 300 --batch 256 --seed 0
                                              # rigorous run: 117,300 iterations
-python3 optimize_pmma.py                     # find the optimal design
-python3 sweep_pareto.py                      # trade-off menu + chart
-python3 architectures.py                     # double/geometric models + gate tests
-open loss_curve.png                          # view the training curve
+python3 networks/neural_adjoint.py           # hunt for records through the network
+python3 baselines/optimize_pmma.py           # direct-search rival
+python3 baselines/sweep_pareto.py            # trade-off menu + chart
+python3 physics/architectures.py             # double/geometric models + gate tests
+open figures/loss_curve.png                  # view the training curve
 ```
 
 Paper protocol: repeat the rigorous run with `--seed 0` through `--seed 4` (5 runs),
@@ -73,7 +76,7 @@ ep  12/40 | train loss 0.00092 | val spec-MSE 0.00089 | baseline theta-MSE 0.058
 | `--lr 3e-4` | smaller learning steps | val loss bounces around |
 | `--seed 3` | different random start | always, ×5 for the paper |
 
-Change ONE thing per run, compare `loss_curve.png` before/after. That's the science.
+Change ONE thing per run, compare `figures/loss_curve.png` before/after. That's the science.
 
 ## 5. Edits INSIDE the code (open the .py file in a text editor)
 
@@ -106,9 +109,9 @@ errors in that metric count 4× more.
 
 ## 6. The `# SYNC` job (your #1 task before paper numbers)
 
-Search `waveguide_physics.py` for `# SYNC`. Each marks a constant I simplified.
+Search `physics/waveguide_physics.py` for `# SYNC`. Each marks a constant I simplified.
 For each: find the exact value/formula in your Paper 1 repo or its cited source,
-replace, rerun `python3 waveguide_physics.py`, and check numbers still look sane.
+replace, rerun `python3 physics/waveguide_physics.py`, and check numbers still look sane.
 Done when the model reproduces Paper 1: PMMA loss 93.64–94.10%, MTF 0.6426–0.6430.
 
 ## 7. When things break

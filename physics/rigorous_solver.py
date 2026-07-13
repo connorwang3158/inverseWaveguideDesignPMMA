@@ -31,7 +31,13 @@ Usage:
     python3 rigorous_solver.py          # runs the scalar-vs-RCWA validation study
 """
 
+import os
+import sys
+
 import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import res_path
 
 try:
     import grcwa
@@ -157,15 +163,17 @@ def convergence_check(nGs=(41, 61, 81, 101)):
         print(f"  nG={g:4d}  T(+1)={r['T1']:.5f}")
 
 
-def verify_designs(csv_in="optimal_designs.csv", csv_out="design_rcwa_check.csv",
+def verify_designs(csv_in=None, csv_out=None,
                    wavelengths=(450.0, 532.0, 635.0)):
     """Rigorous (vector, per-polarization) check of the analytic engine's top
     designs: for each design row, solve the in-coupler with RCWA at normal
     incidence for RGB and record TE/TM first-order efficiencies next to the
     scalar prediction. This is the L2 evidence backing every headline design."""
-    import csv, os
+    import csv
+    csv_in = csv_in or res_path("optimal_designs.csv")
+    csv_out = csv_out or res_path("design_rcwa_check.csv")
     if not os.path.exists(csv_in):
-        print(f"{csv_in} not found — run optimize_pmma.py first"); return
+        print(f"{csv_in} not found — run baselines/optimize_pmma.py first"); return
     with open(csv_in) as f:
         rows = list(csv.DictReader(f))
     out = []
@@ -198,11 +206,11 @@ def main():
         unp, te, tm = eta_unpolarized(500, depth, 0.5)
         rows.append([depth, s, te, tm, unp])
         print(f"{depth:6d} {s:8.4f} {te:8.4f} {tm:8.4f} {unp:8.4f}")
-    with open("rcwa_validation.csv", "w", newline="") as f:
+    with open(res_path("rcwa_validation.csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["depth_nm", "scalar_eta1", "rcwa_TE", "rcwa_TM", "rcwa_unpol"])
         w.writerows(rows)
-    print("saved -> rcwa_validation.csv")
+    print("saved -> results/rcwa_validation.csv")
 
     print("\nProfile comparison at depth=300nm (unpolarized first-order):")
     for prof in PROFILES:

@@ -8,10 +8,14 @@ best waveguide drawn to scale with its grating.
 Usage:  python3 optimize_live.py          (requires: pip3 install matplotlib)
 """
 
+import os
+import sys
+
 import torch
 import matplotlib.pyplot as plt
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from physics.waveguide_physics import (
     forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
 )
 

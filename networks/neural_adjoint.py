@@ -19,14 +19,14 @@ Honesty step: every finalist design is re-scored with the EXACT physics engine,
 ranked by its TRUE objective, and the surrogate-vs-physics gap is reported and
 plotted — a design only counts if the real physics agrees with the network.
 
-Usage:
-    python3 surrogate.py --pmma        # first: train the surrogate
-    python3 neural_adjoint.py          # then: search through it
-    python3 neural_adjoint.py --quick  # fast smoke test
+Usage (from the project root):
+    python3 networks/surrogate.py --pmma        # first: train the surrogate
+    python3 networks/neural_adjoint.py          # then: search through it
+    python3 networks/neural_adjoint.py --quick  # fast smoke test
 Outputs:
-    optimal_designs_na.csv       top designs (surrogate-found, physics-verified)
-    neural_adjoint_run.png       search trajectory + surrogate-vs-physics parity
-    best_design_ever_v2.csv      all-time hall of fame (physics-scored, shared
+    results/optimal_designs_na.csv    top designs (surrogate-found, physics-verified)
+    figures/neural_adjoint_run.png    search trajectory + surrogate-vs-physics parity
+    results/best_design_ever_v2.csv   all-time hall of fame (physics-scored, shared
                                  with optimize_pmma.py; v2 = records under the
                                  corrected TIR-constrained physics)
 """
@@ -35,14 +35,17 @@ import argparse
 import csv
 import datetime
 import os
+import sys
 
 import torch
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import fig_path, res_path
+from physics.waveguide_physics import (
     SPEC_SCALE, forward_model, sample_theta, normalize_theta,
     denormalize_theta, tir_penalty,
 )
-from surrogate import load_surrogate
+from networks.surrogate import load_surrogate
 
 W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # objective weights (match optimize_pmma.py)
 W_TIR = 10.0   # TIR-feasibility penalty weight (FIX-1) — same as optimize_pmma,
@@ -117,7 +120,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
         for lb, v in zip(LABELS, theta[i].tolist()):
             print(f"    {lb:12s} = {v:,.4g}")
 
-    with open("optimal_designs_na.csv", "w", newline="") as f:
+    with open(res_path("optimal_designs_na.csv"), "w", newline="") as f:
         wcsv = csv.writer(f)
         wcsv.writerow(["rank", "J_physics", "J_surrogate",
                        "MTF", "T", "chrom_deg", "T_fov"] + LABELS +
@@ -127,12 +130,12 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
                           [f"{v:.5g}" for v in y_phys[i].tolist()] +
                           [f"{v:.5g}" for v in theta[i].tolist()] +
                           [int(tir_ok[i])])
-    print("\nSaved winners -> optimal_designs_na.csv")
+    print("\nSaved winners -> results/optimal_designs_na.csv")
 
     # hall of fame (shared with optimize_pmma.py): physics-scored record only.
     # v2 = records under the corrected (TIR-constrained, polarization-resolved)
     # physics; v1 records were set by leaky designs and are not comparable.
-    hof, prev_J = "best_design_ever_v2.csv", -1e9
+    hof, prev_J = res_path("best_design_ever_v2.csv"), -1e9
     if os.path.exists(hof):
         with open(hof) as f:
             try:
@@ -190,9 +193,9 @@ def make_figure(traj, y_surr, y_phys, top):
     ax2.set_title("Finalists: surrogate vs physics")
     ax2.grid(alpha=0.25); ax2.legend(fontsize=8)
 
-    fig.tight_layout(); fig.savefig("neural_adjoint_run.png", dpi=150)
+    fig.tight_layout(); fig.savefig(fig_path("neural_adjoint_run.png"), dpi=150)
     plt.close(fig)
-    print("Saved figure -> neural_adjoint_run.png")
+    print("Saved figure -> figures/neural_adjoint_run.png")
 
 
 if __name__ == "__main__":

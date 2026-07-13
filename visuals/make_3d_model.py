@@ -26,6 +26,10 @@ import csv
 import json
 import math
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import res_path, root_path
 
 # slab footprint (mm) — typical AR-combiner eyepiece scale
 SLAB_L, SLAB_W = 30.0, 12.0
@@ -40,14 +44,15 @@ def load_best_design():
     """Pull the winning design out of the result CSVs, if any exist."""
     cols = {"t_mm": "t(mm)", "period_nm": "period(nm)",
             "depth_nm": "depth(nm)", "duty": "duty", "n": "n"}
-    for path in ("optimal_designs_na.csv", "best_design_ever_v2.csv"):
+    for name in ("optimal_designs_na.csv", "best_design_ever_v2.csv"):
+        path = res_path(name)
         if not os.path.exists(path):
             continue
         with open(path) as f:
             rows = list(csv.DictReader(f))
         if rows:
             d = {k: float(rows[0][c]) for k, c in cols.items()}
-            print(f"[3d] using best design from {path}: "
+            print(f"[3d] using best design from results/{name}: "
                   f"period {d['period_nm']:.0f} nm, depth {d['depth_nm']:.0f} nm, "
                   f"duty {d['duty']:.2f}, t {d['t_mm']:.2f} mm")
             return d
@@ -77,7 +82,9 @@ def _box_facets(cx, cy, cz, sx, sy, sz):
     return facets
 
 
-def write_stl(design, path="waveguide_model.stl"):
+def write_stl(design, path=None):
+    if path is None:
+        path = res_path("waveguide_model.stl")
     t = design["t_mm"]
     period_mm = design["period_nm"] * GRATING_ZOOM * 1e-6
     depth_mm = design["depth_nm"] * GRATING_ZOOM * 1e-6
@@ -358,7 +365,9 @@ sync();
 """
 
 
-def write_html(design, path="waveguide_3d.html"):
+def write_html(design, path=None):
+    if path is None:
+        path = root_path("waveguide_3d.html")   # double-click page stays at root
     html = (HTML_TEMPLATE
             .replace("__DESIGN_JSON__", json.dumps(design))
             .replace("__ZOOM__", f"{GRATING_ZOOM:.0f}")

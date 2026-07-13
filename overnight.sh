@@ -42,31 +42,31 @@ echo "Overnight run started: $(date)   (time budget: >= ${HOURS}h)" | tee -a "$L
 
 for SEED in $SEEDS; do
   mark "stage 1/6: surrogate seed $SEED"
-  $CAF python3 surrogate.py --pmma \
+  $CAF python3 networks/surrogate.py --pmma \
     --samples "$SAMPLES" --epochs "$SUR_EPOCHS" --batch 512 --seed "$SEED" \
     >> "$LOG" 2>&1
 done
 
 for SEED in $SEEDS; do
   mark "stage 2/6: inverse (tandem through surrogate) seed $SEED"
-  $CAF python3 train_inverse.py --pmma --decoder surrogate \
+  $CAF python3 networks/train_inverse.py --pmma --decoder surrogate \
     --samples "$SAMPLES" --epochs "$INV_EPOCHS" --batch 256 --seed "$SEED" \
     >> "$LOG" 2>&1
 done
 
 mark "stage 3/6: ablation (tandem through exact physics)"
-$CAF python3 train_inverse.py --pmma --decoder physics \
+$CAF python3 networks/train_inverse.py --pmma --decoder physics \
   --samples "$SAMPLES" --epochs "$INV_EPOCHS" --batch 256 --seed 0 \
   >> "$LOG" 2>&1
 
 mark "stage 4/6: design search (neural adjoint + baselines)"
-$CAF python3 neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" >> "$LOG" 2>&1
-$CAF python3 optimize_pmma.py   >> "$LOG" 2>&1
-$CAF python3 sweep_pareto.py    >> "$LOG" 2>&1
+$CAF python3 networks/neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" >> "$LOG" 2>&1
+$CAF python3 baselines/optimize_pmma.py   >> "$LOG" 2>&1
+$CAF python3 baselines/sweep_pareto.py    >> "$LOG" 2>&1
 
 mark "stage 5/6: figures, 3D model, report"
-python3 make_3d_model.py        >> "$LOG" 2>&1
-python3 make_report.py          >> "$LOG" 2>&1
+python3 visuals/make_3d_model.py        >> "$LOG" 2>&1
+python3 visuals/make_report.py          >> "$LOG" 2>&1
 
 # ---- stage 6: spend the remaining budget. Each lap = one extra surrogate
 # seed + one extra inverse seed + one fresh multi-start record hunt, then a
@@ -74,19 +74,19 @@ python3 make_report.py          >> "$LOG" 2>&1
 EXTRA=5
 while [ $(( $(date +%s) - T0 )) -lt $(( HOURS * 3600 )) ]; do
   mark "stage 6/6: bonus lap, seed $EXTRA (time budget not yet spent)"
-  $CAF python3 surrogate.py --pmma \
+  $CAF python3 networks/surrogate.py --pmma \
     --samples "$SAMPLES" --epochs "$SUR_EPOCHS" --batch 512 --seed "$EXTRA" \
     >> "$LOG" 2>&1
-  $CAF python3 train_inverse.py --pmma --decoder surrogate \
+  $CAF python3 networks/train_inverse.py --pmma --decoder surrogate \
     --samples "$SAMPLES" --epochs "$INV_EPOCHS" --batch 256 --seed "$EXTRA" \
     >> "$LOG" 2>&1
-  $CAF python3 neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" \
+  $CAF python3 networks/neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" \
     --seed "$EXTRA" >> "$LOG" 2>&1
-  python3 make_3d_model.py >> "$LOG" 2>&1
-  python3 make_report.py   >> "$LOG" 2>&1
+  python3 visuals/make_3d_model.py >> "$LOG" 2>&1
+  python3 visuals/make_report.py   >> "$LOG" 2>&1
   EXTRA=$((EXTRA + 1))
 done
 
 ELAPSED_MIN=$(( ( $(date +%s) - T0 ) / 60 ))
 echo "Overnight run finished: $(date)   (total $((ELAPSED_MIN / 60))h $((ELAPSED_MIN % 60))m)" | tee -a "$LOG"
-echo "DONE. Open results_report.html and waveguide_3d.html; records live in best_design_ever_v2.csv"
+echo "DONE. Open results_report.html and waveguide_3d.html; records live in results/best_design_ever_v2.csv"

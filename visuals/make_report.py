@@ -1,12 +1,18 @@
 """
 Compile all result CSVs and figures into one readable HTML report.
 
-Usage:  python3 make_report.py     ->  results_report.html  (double-click to open)
+Usage:  python3 visuals/make_report.py   ->  results_report.html at the
+project root (double-click to open). Tables come from results/, images
+from figures/.
 """
 
 import csv
 import os
+import sys
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import fig_path, res_path, root_path
 
 FILES = [
     ("Forward surrogate runs (physics-learning table)", "surrogate_runs.csv"),
@@ -41,29 +47,30 @@ table{{border-collapse:collapse;margin-top:8px}} td,th{{border:1px solid #ccd;pa
 th{{background:#eef2fa}} img{{max-width:100%;border:1px solid #ccd;border-radius:6px;margin-top:8px}}
 .miss{{color:#a33;font-size:12px}}</style></head><body>
 <h1>AR Waveguide Inverse Design — Results Report</h1>
-<p>Generated {datetime.now():%Y-%m-%d %H:%M}. Re-run <code>python3 make_report.py</code>
+<p>Generated {datetime.now():%Y-%m-%d %H:%M}. Re-run <code>python3 visuals/make_report.py</code>
 after any experiment to refresh.</p>"""]
-    for title, path in FILES:
+    for title, name in FILES:
         parts.append(f"<h2>{title}</h2>")
-        parts.append(table_html(path) if os.path.exists(path)
-                     else f"<p class='miss'>{path} not found — run the matching script first.</p>")
-    for title, path in IMAGES:
+        parts.append(table_html(res_path(name)) if os.path.exists(res_path(name))
+                     else f"<p class='miss'>results/{name} not found — run the matching script first.</p>")
+    for title, name in IMAGES:
         parts.append(f"<h2>{title}</h2>")
-        parts.append(f"<img src='{path}'>" if os.path.exists(path)
-                     else f"<p class='miss'>{path} not found.</p>")
+        # the report sits at the project root, so images resolve via figures/
+        parts.append(f"<img src='figures/{name}'>" if os.path.exists(fig_path(name))
+                     else f"<p class='miss'>figures/{name} not found.</p>")
     parts.append("<h2>3D model</h2>")
-    if os.path.exists("waveguide_3d.html"):
+    if os.path.exists(root_path("waveguide_3d.html")):
         parts.append("<p>Open <a href='waveguide_3d.html'>waveguide_3d.html</a> "
                      "to rotate the winning waveguide in 3D (drag to rotate, "
                      "scroll to zoom). A printable mesh is in "
-                     "<code>waveguide_model.stl</code>.</p>")
+                     "<code>results/waveguide_model.stl</code>.</p>")
     else:
         parts.append("<p class='miss'>waveguide_3d.html not found — run "
-                     "python3 make_3d_model.py.</p>")
+                     "python3 visuals/make_3d_model.py.</p>")
     parts.append("</body></html>")
-    with open("results_report.html", "w") as f:
+    with open(root_path("results_report.html"), "w") as f:
         f.write("\n".join(parts))
-    print("written -> results_report.html (double-click it)")
+    print("written -> results_report.html at the project root (double-click it)")
 
 
 if __name__ == "__main__":

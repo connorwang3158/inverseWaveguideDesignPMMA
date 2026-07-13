@@ -19,10 +19,15 @@ Usage:  python3 make_3d_viz.py
 import csv
 import json
 import os
+import sys
 
-DESIGNS_CSV = "optimal_designs.csv"
-RCWA_CSV = "design_rcwa_check.csv"
-OUT_HTML = "waveguide_designs_3d.html"
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import res_path
+
+DESIGNS_CSV = res_path("optimal_designs.csv")
+RCWA_CSV = res_path("design_rcwa_check.csv")
+OUT_HTML = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "waveguide_designs_3d.html")
 
 
 def load_designs():

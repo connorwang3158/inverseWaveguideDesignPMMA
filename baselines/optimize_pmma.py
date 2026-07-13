@@ -18,9 +18,14 @@ Weights encode the design priorities; sweep them to trace the trade-off frontier
 Usage:  python3 optimize_pmma.py
 """
 
+import os
+import sys
+
 import torch
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import res_path
+from physics.waveguide_physics import (
     forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
     tir_penalty, transmission_polarized, fov_window_deg,
 )
@@ -85,7 +90,7 @@ def optimize():
 
     # permanent record of the winners (now with polarization + FOV window)
     import csv
-    with open("optimal_designs.csv", "w", newline="") as f:
+    with open(res_path("optimal_designs.csv"), "w", newline="") as f:
         wcsv = csv.writer(f)
         wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov",
                        "T_TE", "T_TM", "fov_lo_deg", "fov_hi_deg"] + LABELS)
@@ -95,12 +100,11 @@ def optimize():
                           [f"{pol['TE'][i]:.5g}", f"{pol['TM'][i]:.5g}",
                            f"{fov_lo[i]:.3f}", f"{fov_hi[i]:.3f}"] +
                           [f"{v:.5g}" for v in theta[i].tolist()])
-    print("\nSaved winners -> optimal_designs.csv")
+    print("\nSaved winners -> results/optimal_designs.csv")
 
     # hall of fame: keep the best design EVER seen across all runs; only
     # updates when a new run beats the record
-    import os
-    hof = "best_design_ever_v2.csv"   # v2: records from the corrected (TIR-
+    hof = res_path("best_design_ever_v2.csv")   # v2: records from the corrected (TIR-
     # constrained, polarization-resolved) physics; v1 records are not comparable
     prev_J = -1e9
     if os.path.exists(hof):

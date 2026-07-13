@@ -36,19 +36,20 @@ pip3 install grcwa autograd
 To open a terminal *in this folder*: on macOS, open Terminal, type `cd `
 (with a space), drag the project folder onto the window, press Enter.
 
-## 2. The five-minute tour (run these in order)
+## 2. The five-minute tour (run these in order, from the project root)
 
 ```bash
-python3 waveguide_physics.py          # sanity-check the physics simulator
-python3 surrogate.py --pmma --quick   # train the physics-learning network (~1 min)
-python3 train_inverse.py --pmma --quick   # train the designer network (~2 min)
-python3 neural_adjoint.py --quick     # let the network hunt for the best design
-python3 make_3d_model.py              # build the 3D model of the winner
-python3 make_report.py                # bundle everything into one web page
+python3 physics/waveguide_physics.py           # sanity-check the physics simulator
+python3 networks/surrogate.py --pmma --quick   # train the physics-learning network (~1 min)
+python3 networks/train_inverse.py --pmma --quick   # train the designer network (~2 min)
+python3 networks/neural_adjoint.py --quick     # let the network hunt for the best design
+python3 visuals/make_3d_model.py               # build the 3D model of the winner
+python3 visuals/make_report.py                 # bundle everything into one web page
 ```
 
 Then double-click **`results_report.html`** (all tables + charts) and
-**`waveguide_3d.html`** (rotate the waveguide in 3D, drag the sliders).
+**`waveguide_3d.html`** (rotate the waveguide in 3D) — both sit at the
+project root.
 
 `--quick` runs are small smoke tests. Drop the flag for real runs.
 
@@ -85,15 +86,15 @@ stage 6/6: bonus lap, seed 5, 6, …   one extra seed + record hunt per lap,
   ```
 
 - New records print `NEW RECORD` in the log and land in
-  `best_design_ever_v2.csv` (stage 4 onward, then once per bonus lap).
+  `results/best_design_ever_v2.csv` (stage 4 onward, then once per bonus lap).
 - In the morning, open `results_report.html` — it is rebuilt after every
   bonus lap, so it is always current. Everything is also saved as CSVs, so
   nothing is lost if you close the page.
 
 If the run is interrupted, just run `bash overnight.sh` again — per-seed
-checkpoints are kept, and the best-ever files (`forward_surrogate.pt`,
-`best_design_ever_v2.csv`) only update when a new run actually beats the
-record.
+checkpoints are kept, and the best-ever files (`checkpoints/forward_surrogate.pt`,
+`results/best_design_ever_v2.csv`) only update when a new run actually beats
+the record.
 
 **If you edit `waveguide_physics.py`**, the pipeline notices by itself: every
 surrogate checkpoint stores a fingerprint of the physics it learned from, and
@@ -106,13 +107,13 @@ engine belong in `archive_old_physics/`, not mixed into the live tables.
 
 | You run | You get | What it is |
 |---|---|---|
-| `surrogate.py` | `forward_surrogate.pt`, `surrogate_loss_curve.png`, `surrogate_parity.png`, `surrogate_runs.csv` | The trained physics-emulator network + proof of how well it learned (parity plot: predictions vs truth; R² near 1.0 = learned) |
-| `train_inverse.py` | `inverse_model_seed*.pt`, `loss_curve.png`, `training_runs.csv` | The trained designer network + its learning curve |
-| `neural_adjoint.py` | `optimal_designs_na.csv`, `neural_adjoint_run.png`, `best_design_ever_v2.csv` | Best designs found by searching through the network, verified with exact physics |
-| `optimize_pmma.py`, `sweep_pareto.py` | `optimal_designs.csv`, `pareto_*.{csv,png}` | Non-neural baselines the paper compares against |
-| `make_3d_model.py` | `waveguide_3d.html`, `waveguide_model.stl` | Interactive 3D model + a mesh file any 3D viewer/printer opens |
-| `make_report.py` | `results_report.html` | One page with every table and figure |
-| `validate.py` | pass/fail printout | 7 physics integrity tests (needs `grcwa`) |
+| `networks/surrogate.py` | `checkpoints/forward_surrogate.pt`, `figures/surrogate_loss_curve.png`, `figures/surrogate_parity.png`, `results/surrogate_runs.csv` | The trained physics-emulator network + proof of how well it learned (parity plot: predictions vs truth; R² near 1.0 = learned) |
+| `networks/train_inverse.py` | `checkpoints/inverse_model_seed*.pt`, `figures/loss_curve.png`, `results/training_runs.csv` | The trained designer network + its learning curve |
+| `networks/neural_adjoint.py` | `results/optimal_designs_na.csv`, `figures/neural_adjoint_run.png`, `results/best_design_ever_v2.csv` | Best designs found by searching through the network, verified with exact physics |
+| `baselines/optimize_pmma.py`, `baselines/sweep_pareto.py` | `results/optimal_designs.csv`, `results/pareto_results.csv`, `figures/pareto_front.png` | Non-neural baselines the paper compares against |
+| `visuals/make_3d_model.py` | `waveguide_3d.html` (root), `results/waveguide_model.stl` | Interactive 3D model + a mesh file any 3D viewer/printer opens |
+| `visuals/make_report.py` | `results_report.html` (root) | One page with every table and figure |
+| `physics/validate.py` | pass/fail printout | 7 physics integrity tests (needs `grcwa`) |
 
 ## 5. How to read the training printout
 
@@ -145,8 +146,8 @@ the loss-curve PNGs before/after:
 | `--decoder physics` | (inverse net only) train through exact equations instead of the surrogate | the ablation for the paper |
 
 Paper protocol: run each experiment with seeds 0–4 and report the median ±
-range of "best validation spec-MSE" from `training_runs.csv` /
-`surrogate_runs.csv`.
+range of "best validation spec-MSE" from `results/training_runs.csv` /
+`results/surrogate_runs.csv`.
 
 ## 7. When things break
 
@@ -154,8 +155,8 @@ range of "best validation spec-MSE" from `training_runs.csv` /
 |---|---|
 | `No module named torch` | `pip3 install torch` |
 | `No module named numpy/matplotlib` | `pip3 install numpy matplotlib` |
-| `forward_surrogate.pt not found` | run `python3 surrogate.py --pmma` first — the other scripts need the trained surrogate |
-| `trained under a DIFFERENT waveguide_physics.py` | the physics engine changed since the surrogate was trained; retrain with `python3 surrogate.py --pmma` (the overnight script does this automatically) |
+| `forward_surrogate.pt not found` | run `python3 networks/surrogate.py --pmma` first — the other scripts need the trained surrogate |
+| `trained under a DIFFERENT waveguide_physics.py` | the physics engine changed since the surrogate was trained; retrain with `python3 networks/surrogate.py --pmma` (the overnight script does this automatically) |
 | `No such file or directory` on `cd` | type `cd `, drag the project folder into the terminal, Enter |
 | 3D page won't load | the viewer is fully self-contained (no internet needed) — try another browser, or open `waveguide_model.stl` in any 3D viewer instead |
 | Overnight run died partway | rerun `bash overnight.sh` — records only improve, never regress |

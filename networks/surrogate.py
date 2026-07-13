@@ -31,12 +31,15 @@ Outputs:
 import argparse
 import csv
 import os
+import sys
 import time
 
 import torch
 import torch.nn as nn
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import ckpt_path, fig_path, res_path
+from physics.waveguide_physics import (
     BOUNDS, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
     normalize_spec, denormalize_theta, use_pmma,
 )
@@ -92,16 +95,18 @@ def _probe_matches(probe_saved, probe_now) -> bool:
             and torch.allclose(probe_now, probe_saved, rtol=1e-4, atol=1e-6))
 
 
-def load_surrogate(path: str = "forward_surrogate.pt") -> ForwardNet:
+def load_surrogate(path: str = None) -> ForwardNet:
     """Load a trained surrogate AND restore the design space it was trained in
     (PMMA vs full, including the PMMA FOV metric angle), so every downstream
     consumer scores physics exactly as the surrogate saw it in training.
     Refuses checkpoints whose stored physics probe no longer matches the live
     physics engine — those predictions are stale and must be retrained."""
+    if path is None:
+        path = ckpt_path("forward_surrogate.pt")
     if not os.path.exists(path):
         raise SystemExit(
             f"{path} not found — train the forward surrogate first:\n"
-            f"    python3 surrogate.py --pmma")
+            f"    python3 networks/surrogate.py --pmma")
     ck = torch.load(path, weights_only=True)
     if ck.get("pmma"):
         use_pmma()          # restores PMMA FOV angle as well as the bounds
@@ -111,7 +116,7 @@ def load_surrogate(path: str = "forward_surrogate.pt") -> ForwardNet:
             f"{path} was trained under a DIFFERENT waveguide_physics.py than "
             f"the current one — its learned physics is stale and would steer "
             f"every search into invalid designs.\n"
-            f"Retrain first:  python3 surrogate.py --pmma")
+            f"Retrain first:  python3 networks/surrogate.py --pmma")
     net = ForwardNet(hidden=ck["hidden"], depth=ck["depth"])
     net.load_state_dict(ck["model"])
     net.eval()
@@ -197,27 +202,29 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
             "depth": model.depth, "bounds": BOUNDS.clone(), "pmma": pmma,
             "best_val": best_va, "seed": seed, "probe_spec": probe,
             "r2": r2.tolist(), "n_train": n_train, "epochs": epochs}
-    torch.save(ckpt, f"forward_surrogate_seed{seed}.pt")
-    print(f"Saved weights -> forward_surrogate_seed{seed}.pt")
+    torch.save(ckpt, ckpt_path(f"forward_surrogate_seed{seed}.pt"))
+    print(f"Saved weights -> checkpoints/forward_surrogate_seed{seed}.pt")
 
     # keep forward_surrogate.pt = the best surrogate ever trained in this space
     # AND under the current physics — a checkpoint from an older physics engine
     # is stale regardless of its val score, so it is always replaced.
+    best_pt = ckpt_path("forward_surrogate.pt")
     keep_old = False
-    if os.path.exists("forward_surrogate.pt"):
-        old = torch.load("forward_surrogate.pt", weights_only=True)
+    if os.path.exists(best_pt):
+        old = torch.load(best_pt, weights_only=True)
         keep_old = (old.get("pmma") == pmma
                     and _probe_matches(old.get("probe_spec"), probe)
                     and old["best_val"] <= best_va)
     if keep_old:
-        print("forward_surrogate.pt kept (existing checkpoint is better)")
+        print("checkpoints/forward_surrogate.pt kept (existing checkpoint is better)")
     else:
-        torch.save(ckpt, "forward_surrogate.pt")
-        print("forward_surrogate.pt updated (new best for this design space "
-              "under the current physics)")
+        torch.save(ckpt, best_pt)
+        print("checkpoints/forward_surrogate.pt updated (new best for this "
+              "design space under the current physics)")
 
-    new = not os.path.exists("surrogate_runs.csv")
-    with open("surrogate_runs.csv", "a", newline="") as f:
+    runs_csv = res_path("surrogate_runs.csv")
+    new = not os.path.exists(runs_csv)
+    with open(runs_csv, "a", newline="") as f:
         w = csv.writer(f)
         if new:
             w.writerow(["seed", "pmma", "samples", "epochs", "batch", "lr",
@@ -226,7 +233,7 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
         w.writerow([seed, int(pmma), n_train, epochs, batch, lr,
                     steps_per_epoch * epochs, f"{best_va:.6f}"] +
                    [f"{v:.5f}" for v in r2.tolist()])
-    print("Appended run summary -> surrogate_runs.csv")
+    print("Appended run summary -> results/surrogate_runs.csv")
 
     make_figures(history, y_hat, y_te, r2)
     return model
@@ -249,9 +256,9 @@ def make_figures(history, y_hat, y_te, r2):
     ax.set_ylabel("loss (log scale, lower = better)")
     ax.set_title("Forward surrogate network — learning the physics")
     ax.grid(alpha=0.25); ax.legend()
-    fig.tight_layout(); fig.savefig("surrogate_loss_curve.png", dpi=150)
+    fig.tight_layout(); fig.savefig(fig_path("surrogate_loss_curve.png"), dpi=150)
     plt.close(fig)
-    print("Saved training curve -> surrogate_loss_curve.png")
+    print("Saved training curve -> figures/surrogate_loss_curve.png")
 
     fig, axes = plt.subplots(2, 2, figsize=(8, 7.5))
     for k, ax in enumerate(axes.flat):
@@ -264,9 +271,9 @@ def make_figures(history, y_hat, y_te, r2):
         ax.set_xlabel("true (exact physics)"); ax.set_ylabel("network prediction")
         ax.grid(alpha=0.25)
     fig.suptitle("Surrogate parity on unseen designs (normalized units)")
-    fig.tight_layout(); fig.savefig("surrogate_parity.png", dpi=150)
+    fig.tight_layout(); fig.savefig(fig_path("surrogate_parity.png"), dpi=150)
     plt.close(fig)
-    print("Saved parity plot -> surrogate_parity.png")
+    print("Saved parity plot -> figures/surrogate_parity.png")
 
 
 if __name__ == "__main__":

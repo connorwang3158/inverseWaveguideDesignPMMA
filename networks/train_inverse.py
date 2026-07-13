@@ -21,12 +21,16 @@ Usage:  python3 train_inverse.py --pmma [--decoder surrogate|physics] [--quick]
 """
 
 import argparse
+import os
+import sys
 import time
 
 import torch
 import torch.nn as nn
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import ckpt_path, fig_path, res_path
+from physics.waveguide_physics import (
     forward_model, sample_theta, denormalize_theta, normalize_theta,
     normalize_spec, use_pmma,
 )
@@ -136,20 +140,21 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
     print(f"\nbest validation spec-MSE (exact physics): {best_va:.6f}")
     torch.save({"model": model.state_dict(), "baseline": baseline.state_dict(),
                 "best_val": best_va, "seed": seed, "decoder": decoder},
-               f"inverse_model_seed{seed}.pt")
-    print(f"Saved weights -> inverse_model_seed{seed}.pt")
+               ckpt_path(f"inverse_model_seed{seed}.pt"))
+    print(f"Saved weights -> checkpoints/inverse_model_seed{seed}.pt")
 
     # permanent record: one line per training run, for the paper's 5-seed table
-    import csv, os
-    new = not os.path.exists("training_runs.csv")
-    with open("training_runs.csv", "a", newline="") as f:
+    import csv
+    runs_csv = res_path("training_runs.csv")
+    new = not os.path.exists(runs_csv)
+    with open(runs_csv, "a", newline="") as f:
         wcsv = csv.writer(f)
         if new:
             wcsv.writerow(["seed", "decoder", "samples", "epochs", "batch",
                            "lr", "iterations", "best_val_specMSE"])
         wcsv.writerow([seed, decoder, n_train, epochs, batch, lr,
                        steps_per_epoch * epochs, f"{best_va:.6f}"])
-    print("Appended run summary -> training_runs.csv")
+    print("Appended run summary -> results/training_runs.csv")
 
     try:  # loss curve figure — visual record of the training run
         import matplotlib
@@ -162,8 +167,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
         ax.set_xlabel("epoch (pass through dataset)")
         ax.set_ylabel("loss (log scale, lower = better)")
         ax.set_title("Inverse network training progress")
-        ax.legend(); fig.tight_layout(); fig.savefig("loss_curve.png", dpi=150)
-        print("Saved training curve -> loss_curve.png")
+        ax.legend(); fig.tight_layout()
+        fig.savefig(fig_path("loss_curve.png"), dpi=150)
+        print("Saved training curve -> figures/loss_curve.png")
     except ImportError:
         print("(install matplotlib to also get loss_curve.png)")
     return model

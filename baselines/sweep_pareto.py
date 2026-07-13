@@ -9,10 +9,14 @@ Usage: python3 sweep_pareto.py
 """
 
 import csv
+import os
+import sys
 
 import torch
 
-from waveguide_physics import (
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from paths import fig_path, res_path
+from physics.waveguide_physics import (
     forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
     tir_penalty,
 )
@@ -56,7 +60,7 @@ def main():
               f"duty {theta[7]:.2f} t {theta[4]:.2f}mm")
         rows.append([w_mtf, w_T, w_ca, mtf, T, ca, T_fov] + theta.tolist())
 
-    with open("pareto_results.csv", "w", newline="") as f:
+    with open(res_path("pareto_results.csv"), "w", newline="") as f:
         wr = csv.writer(f)
         wr.writerow(["w_mtf", "w_T", "w_ca", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
         wr.writerows(rows)
@@ -75,8 +79,8 @@ def main():
         fig.colorbar(sc, label="chromatic spread (deg)")
         ax.set_xlabel("Transmission (%)"); ax.set_ylabel("System MTF @ 40 cyc/mm")
         ax.set_title("PMMA design trade-off frontier (TIR-constrained physics v2)")
-        fig.tight_layout(); fig.savefig("pareto_front.png", dpi=150)
-        print("saved pareto_front.png")
+        fig.tight_layout(); fig.savefig(fig_path("pareto_front.png"), dpi=150)
+        print("saved figures/pareto_front.png")
     except ImportError:
         print("matplotlib not installed; CSV only")
 
