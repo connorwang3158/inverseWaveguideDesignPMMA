@@ -25,6 +25,7 @@ FILES = [
 ]
 IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
           ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
+          ("Memorization audit (generalization evidence)", "memorization_audit.png"),
           ("Inverse-network training curve", "loss_curve.png"),
           ("Neural-adjoint search", "neural_adjoint_run.png"),
           ("Trade-off frontier", "pareto_front.png")]

@@ -183,3 +183,30 @@ in the current results. Verify DOIs before citing.
     periodic structures (2026). arXiv:2606.28119 — energy-conservation
     constraints inside the surrogate; candidate regularizer if the v3
     RCWA-trained surrogate shows unphysical predictions.
+
+### G5. Accuracy & data-efficiency upgrades (2026-07-14 re-scan)
+
+The v2 analytic surrogate is saturated (73-seed audit: never-seen error =
+1.1x training error, R^2 >= 0.998 every retraining), so these matter for the
+v3 RCWA-labeled surrogate, where each training label becomes expensive.
+
+38. Marzban et al. (2026). Inverse design in nanophotonics via representation
+    learning. *Advanced Optical Materials*.
+    https://doi.org/10.1002/adom.202502062 — current field-wide review; use
+    to check the paper's method taxonomy and related-work coverage.
+39. Physics-informed uncertainty enables reliable AI-driven design (2026).
+    arXiv:2601.18638 — scores a surrogate's credibility by how much its
+    predictions violate physical laws (energy conservation); natural add-on
+    to our physics-probe system for the v3 surrogate.
+40. ConfEviSurrogate: conformalized evidential surrogate for uncertainty
+    quantification (2025). arXiv:2504.02919 — per-prediction error bars;
+    would let the neural adjoint discount design regions where the
+    surrogate is unsure instead of trusting it uniformly.
+41. Physics-based transfer learning for efficient nanophotonic device
+    optimization (2025). *Scientific Reports*.
+    https://www.nature.com/articles/s41598-025-23519-5 — pretrain on cheap
+    approximate physics, fine-tune on few expensive rigorous labels: the
+    v2 analytic engine becomes the pretraining teacher for the v3 RCWA
+    surrogate, cutting the required grcwa grid size.
+    (AutoTandemML active-learning tandem is already listed as item 14 —
+    the same label-efficiency argument applies.)
