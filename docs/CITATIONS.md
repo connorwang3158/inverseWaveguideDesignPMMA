@@ -126,3 +126,60 @@ canon (verified against publisher listings) and carries the paper's L2 claims.
     github.com/connorwang3158/ModelingSingularFlatDiffractiveWaveguidesWithinARGlasses
     — used as the system-metric baseline; superseded at the coupler level by
     the rigorous RCWA treatment (claims ladder L2).
+
+## G. Shortlist from the 2026-07 literature sweep (candidate upgrades)
+
+Frameworks and methods evaluated for the next iteration; none are load-bearing
+in the current results. Verify DOIs before citing.
+
+### G1. Differentiable rigorous solvers (for the v3 RCWA-calibrated engine)
+
+28. Huang, Y., et al. (2024). Eigendecomposition-free inverse design of
+    meta-optics devices (TorchRDIT: differentiable R-DIT, PyTorch, reports
+    ~16× speedup over RCWA-based inverse design). *Optics Express*, 32(8),
+    13986. https://github.com/yi-huang-1/torchrdit — fastest path to putting
+    rigorous efficiencies INSIDE the training loop.
+29. NIDN — Neural Inverse Design of Nanostructures (ESA, 2022). *Scientific
+    Reports*, 12. https://www.nature.com/articles/s41598-022-26312-w — fully
+    differentiable RCWA derived from grcwa; closest drop-in for our stack.
+    (torcwa and meent already listed in Group D, items 24–25.)
+
+### G2. Ill-posedness benchmarks & the boundary-loss neural adjoint
+
+30. Ren, S., Mahendra, A., Khatib, O., Deng, Y., Padilla, W. J., & Malof, J. M.
+    (2022). Inverse deep learning methods and benchmarks for artificial
+    electromagnetic material design. *Nanoscale*, 14. arXiv:2112.10254; code:
+    https://github.com/BensonRen/AEM_DIM_Bench — benchmark protocol worth
+    mirroring in §6.3, and the boundary-loss NA variant: adds a penalty that
+    keeps adjoint searches off the design-space walls — directly relevant
+    because our current record pins n, depth, Lc, and alpha at their bounds.
+31. Extended neural adjoint with regression activation mapping (2025).
+    arXiv:2507.18644 — interpretability layer over NA for multilayer optics.
+
+### G3. Multimodal inverse methods (one-to-many; candidate baselines)
+
+32. Unni, R., Yao, K., & Zheng, Y. (2020). Deep convolutional mixture density
+    network for inverse design of layered photonic structures. *ACS Photonics*,
+    7(10). https://doi.org/10.1021/acsphotonics.0c00630 — MDN outputs a
+    DISTRIBUTION of designs per target; natural extra baseline next to the
+    tandem net and naive regressor.
+33. Transfer-learning-assisted MDN for nanophotonics (2024). arXiv:2401.12254.
+34. AdjointDiffusion: physics-guided, fabrication-aware diffusion models for
+    photonic inverse design (2025). arXiv:2504.17077 — generative frontier;
+    data-hungry, flag as future work rather than a baseline.
+
+### G4. System-level efficiency context (for framing PMMA's numbers)
+
+35. Breaking the in-coupling efficiency limit in waveguide AR displays with
+    polarization volume gratings (2024). *Light: Science & Applications*, 13.
+    https://www.nature.com/articles/s41377-024-01537-8 — reports ~10% (20° FOV)
+    and ~3% (30° FOV) system efficiencies for conventional diffractive
+    combiners: the honest comparison window for our PMMA transmission numbers.
+36. Single-layer full-color waveguide display based on a broadband efficient
+    meta-grating (2025). *Nanomaterials*, 15(19), 1493.
+    https://doi.org/10.3390/nano15191493 — >60% RGB coupling on thin glass;
+    the high-index performance ceiling PMMA trades away for cost/weight.
+37. Physics-constrained neural networks for surrogate modeling of lossless
+    periodic structures (2026). arXiv:2606.28119 — energy-conservation
+    constraints inside the surrogate; candidate regularizer if the v3
+    RCWA-trained surrogate shows unphysical predictions.
