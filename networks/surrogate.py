@@ -230,6 +230,9 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
     ckpt = {"model": model.state_dict(), "hidden": model.hidden,
             "depth": model.depth, "bounds": BOUNDS.clone(), "pmma": pmma,
             "best_val": best_va, "cmp_val": cmp_val, "seed": seed,
+            "train_seed": TRAIN_SEED_BASE + seed,  # exact dataset seed, so
+            # audits can reconstruct THIS model's training data without
+            # guessing which seed-mapping era the checkpoint came from
             "probe_spec": probe,
             "r2": r2.tolist(), "n_train": n_train, "epochs": epochs}
     torch.save(ckpt, ckpt_path(f"forward_surrogate_seed{seed}.pt"))
