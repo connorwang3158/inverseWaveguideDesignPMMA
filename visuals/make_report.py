@@ -22,6 +22,9 @@ FILES = [
     ("Optimal designs (gradient-baseline winners)", "optimal_designs.csv"),
     ("Trade-off sweep (priority menu)", "pareto_results.csv"),
     ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
+    ("RCWA check of neural-adjoint winners (scalar-validity audit)",
+     "design_rcwa_check_na.csv"),
+    ("Memorization audit (numbers)", "memorization_audit.csv"),
 ]
 IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
           ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
