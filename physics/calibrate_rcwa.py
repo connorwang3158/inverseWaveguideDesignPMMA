@@ -54,7 +54,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import res_path
-from physics.rigorous_solver import N_PMMA, grating_orders_rcwa
+from physics.rigorous_solver import NG, grating_orders_rcwa
 
 # Grid axes. Depth is the structured dimension (Kogelnik-like oscillation of
 # eta with phase depth) and gets the densest sampling; eta varies slowly over
@@ -66,11 +66,22 @@ DEPTHS = np.linspace(20.0, 400.0, 77)          # 5 nm steps
 DUTIES = np.linspace(0.2, 0.8, 13)             # 0.05 steps
 WLS = np.array([450.0, 532.0, 635.0])          # RGB primaries, match WL
 POLS = ("s", "p")                              # s=TE, p=TM (engine order)
-NG = 61          # Fourier orders: rigorous_solver's convergence_check shows
-                 # T(+1) stable to 5 decimals already at nG=41 for this window
+# NG (Fourier orders) comes from rigorous_solver; its convergence_check shows
+# T(+1) stable to 5 decimals already at nG=41 for this window
 GRID_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                          "rcwa_eta_grid.npz")
 N_OFFGRID = 48   # random off-grid verification solves
+
+
+def _init_worker(ns, periods, depths, duties):
+    """Install the parent's grid axes in the worker. Required for --quick
+    correctness on macOS/Windows: their spawn start method re-imports this
+    module in each worker, which would silently restore the FULL axes while
+    the parent hands out quick-grid indices — every solve would then run at
+    the wrong coordinates. (Linux fork inherits the rebinding and never
+    noticed.)"""
+    global NS, PERIODS, DEPTHS, DUTIES
+    NS, PERIODS, DEPTHS, DUTIES = ns, periods, depths, duties
 
 
 def _solve_one(task):
@@ -100,7 +111,8 @@ def build_grid(n_procs=None):
     print(f"solving {len(tasks)} rigorous RCWA problems (nG={NG}) "
           f"on {n_procs} processes ...")
     t0, done = time.time(), 0
-    with Pool(n_procs) as pool:
+    with Pool(n_procs, initializer=_init_worker,
+              initargs=(NS, PERIODS, DEPTHS, DUTIES)) as pool:
         for task, t1 in pool.imap_unordered(_solve_one, tasks, chunksize=8):
             eta[task] = t1
             done += 1
@@ -179,8 +191,8 @@ def main():
         "n_axis": list(NS), "profile": "binary", "incidence_deg": 0.0,
         "quick": args.quick, "offgrid_mean_abs_err": round(mean_err, 6),
         "offgrid_max_abs_err": round(max_err, 6)})
-    np.savez(GRID_PATH, ns=NS, periods=PERIODS, depths=DEPTHS, duties=DUTIES,
-             wls=WLS, eta=eta, meta=np.array(meta))
+    np.savez_compressed(GRID_PATH, ns=NS, periods=PERIODS, depths=DEPTHS,
+                        duties=DUTIES, wls=WLS, eta=eta, meta=np.array(meta))
     print(f"\nsaved calibration grid -> {GRID_PATH}")
     print(f"meta: {meta}")
     print(f"total {((time.time()-t0)/60):.1f} min")

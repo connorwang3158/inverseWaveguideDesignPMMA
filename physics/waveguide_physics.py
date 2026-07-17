@@ -285,6 +285,25 @@ def eta_rcwa(n, period, depth, duty, wl_idx: int = 1,
     return _interp_eta(_rcwa_grid(), n, period, depth, duty, wl_idx, pol)
 
 
+def eta_first_order(n, period, depth, duty, wl_idx: int = 1,
+                    pol: str = "unpol") -> torch.Tensor:
+    """The engine's single source of truth for grating coupling efficiency.
+
+    PMMA mode (v3): rigorous RCWA-calibrated interpolation, polarization-
+    resolved. Full-material mode: the scalar binary-phase-grating formula
+    (Goodman, Fourier Optics), eta_1 = 4 (sin(pi*duty)/pi)^2 sin^2(phi/2)
+    with phi = 2 pi depth (n-1)/lambda — the calibration grid covers only
+    the PMMA window, and scalar theory is polarization-blind, so `pol` is
+    ignored there (Pommet et al. 1994 quantify the scalar error at
+    ~1-lambda features; full-space numbers remain v2-level accuracy)."""
+    if PMMA_MODE:
+        return eta_rcwa(n, period, depth, duty, wl_idx=wl_idx, pol=pol)
+    lam = float(WL[wl_idx])
+    phi = 2 * torch.pi * depth * (n - 1.0) / lam
+    return (4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2
+            * torch.sin(phi / 2) ** 2)
+
+
 def sample_theta(n_samples: int, generator=None) -> torch.Tensor:
     """Uniform (log-uniform for LOG_DIMS) sampling within physical bounds."""
     u = torch.rand(n_samples, 8, generator=generator)
@@ -439,23 +458,13 @@ def _transmission_pol(theta: torch.Tensor, field_deg: float,
     S_corr = 1.0 / (1.0 + (Lc / 3e5))
     T_scatter = torch.exp(-per_bounce * S_corr * NB)
 
-    # --- Grating coupling (v3). PMMA mode: rigorous RCWA-calibrated
-    #     first-order efficiency, interpolated per polarization from the grcwa
-    #     grid — at the sub-wavelength PMMA periods scalar theory overshoots
-    #     ~5-15x and is polarization-blind (see the v3 REVISION block).
-    #     Full-material mode keeps the scalar binary-phase-grating formula
-    #     (Goodman, Fourier Optics): eta_1 = 4 (sin(pi*duty)/pi)^2 sin^2(phi/2),
-    #     phi = 2 pi depth (n-1)/lambda, ceiling 4/pi^2 ~ 40.5% — the grid
-    #     covers only the PMMA window (Pommet et al. 1994 quantify the scalar
-    #     error at ~1-lambda features). Angular acceptance applies to the
-    #     in-coupler only (FIX-5); the out-coupler sees the guided angle by
-    #     construction.
-    if PMMA_MODE:
-        eta = eta_rcwa(n, period, depth, duty, wl_idx=1, pol=pol)
-    else:
-        phi = 2 * torch.pi * depth * (n - 1.0) / lam_g
-        eta = (4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2
-               * torch.sin(phi / 2) ** 2)
+    # --- Grating coupling (v3): eta_first_order() owns the mode branch —
+    #     rigorous RCWA-calibrated per-polarization efficiency in PMMA mode
+    #     (scalar theory overshoots ~5-15x at the sub-wavelength PMMA periods
+    #     and is pol-blind, see the v3 REVISION block), scalar Goodman formula
+    #     in the full space. Angular acceptance applies to the in-coupler only
+    #     (FIX-5); the out-coupler sees the guided angle by construction.
+    eta = eta_first_order(n, period, depth, duty, wl_idx=1, pol=pol)
     s_i = torch.sin(torch.deg2rad(torch.tensor(float(field_deg),
                                                device=theta.device)))
     accept = torch.exp(-(s_i / ACCEPT_SIN) ** 2)
@@ -555,17 +564,13 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
     mtf_grat = 1.0 - 0.15 * torch.sin(phi / 2) ** 2
 
     # 5) Coupler MTF: contrast degradation from finite diffraction efficiency
-    #    across two coupling events (Goodsell et al. 2024 framing); eta
-    #    normalized by its attainable ceiling — the grid's own unpolarized
-    #    532 nm maximum in PMMA mode (v3), the 4/pi^2 scalar ceiling in the
-    #    full space (heuristic L1)  # SYNC
-    if PMMA_MODE:
-        eta = eta_rcwa(n, period, depth, duty, wl_idx=1, pol="unpol")
-        mtf_coup = 0.80 + 0.20 * (eta / _rcwa_grid()["coup_ceil_532"])
-    else:
-        eta = (4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2
-               * torch.sin(phi / 2) ** 2)
-        mtf_coup = 0.80 + 0.20 * (eta / 0.4053)
+    #    across two coupling events (Goodsell et al. 2024 framing); eta from
+    #    eta_first_order(), normalized by its attainable ceiling — the grid's
+    #    own unpolarized 532 nm maximum in PMMA mode (v3), the 4/pi^2 scalar
+    #    ceiling in the full space (heuristic L1)  # SYNC
+    eta = eta_first_order(n, period, depth, duty, wl_idx=1, pol="unpol")
+    ceil = _rcwa_grid()["coup_ceil_532"] if PMMA_MODE else 0.4053
+    mtf_coup = 0.80 + 0.20 * (eta / ceil)
 
     return mtf_diff * mtf_rough * mtf_chrom * mtf_grat * mtf_coup
 

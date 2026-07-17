@@ -9,8 +9,9 @@
   manuscript draft abstract, but the paper itself still needs the
   reverse-engineering case study, the OOD test, the baseline table, and the
   Paper-1 `# SYNC` unit tests (see `docs/NEXT_STEPS.md` §3) before submission.
-- Numbers marked ⟨v3⟩ come from the first single-seed v3 run (2026-07-17);
-  refresh them after the first full 5-seed v3 overnight before circulating.
+- All numbers below are from the full 5-seed v3 protocol run of 2026-07-17
+  (surrogate seeds 0–4 at 150k/250; tandem both decoder arms at 150k/400;
+  neural-adjoint 4000×600; record RCWA-verified per polarization).
 
 ---
 
@@ -38,11 +39,15 @@ periods (430–449 nm) — with a polarization-resolved efficiency term
 calibrated to 90,090 rigorous RCWA solutions over index, period, depth, and
 duty cycle (mean interpolation error 5.6×10⁻⁴, audited against off-grid
 solves). A forward surrogate network reproduces this engine with held-out
-R² ≥ 0.998 across all metrics and passes a four-test memorization audit; a
+R² ≥ 0.9989 on every metric across five independent retrainings and passes a
+four-test memorization audit (never-seen error 1.2× training error); a
 tandem inverse network trained through the frozen forward model resolves the
 one-to-many inverse problem, recovering designs that meet requested
-specifications in milliseconds; and a neural-adjoint search over the trained
-surrogate discovers record designs. Rigorous calibration qualitatively
+specifications in milliseconds with 0.8–7% median per-metric error — where a
+direct design-regression baseline fails at 12–47%, the signature of inverse
+non-uniqueness — and a neural-adjoint search over the trained surrogate
+discovers record designs that an independent exact-physics gradient search
+reproduces. Rigorous calibration qualitatively
 changes the optimum: the best design's grating depth moves from the
 scalar-theory bound (400 nm) to an interior optimum at ≈200 nm and its duty
 cycle from 0.5 to ≈0.41, with transmission quoted at rigorous rather than
@@ -69,12 +74,19 @@ surrogate-based inverse design.
 
 ---
 
-## Fill-in checklist before submission
+## Where each number comes from (all measured, 2026-07-17)
 
-- [ ] ⟨v3⟩ record depth/MTF/T from `results/best_design_ever_v3.csv` after the
-      first full overnight (5 seeds; the single-seed 2026-07-17 numbers are
-      placeholders of the same magnitude).
-- [ ] Surrogate R² under v3 from `results/surrogate_runs_v3.csv` (quote the
-      5-seed range, not one seed).
-- [ ] Tandem spec-MSE under v3 from `results/training_runs_v3.csv`.
-- [ ] Verify author/affiliation formatting per SPIE portal requirements.
+- Record design: `results/best_design_ever_v3.csv` — J=0.4053, MTF 0.784,
+  T 1.25%, chrom 28.8°, at n=1.5 / period 448.1 nm / depth 199.5 nm /
+  duty 0.425; rigorous per-pol verification in
+  `results/design_rcwa_check_na_v3.csv` (unpol η₁ = 0.096 at 532 nm — 41%
+  above the v2 record's actual rigorous coupling).
+- Surrogate R²: `results/surrogate_runs_v3.csv` — R²(MTF) 0.99891–0.99935
+  over seeds 0–4; all other metrics ≥ 0.9996.
+- Tandem: `results/training_runs_v3.csv` — spec-MSE 0.001064
+  (surrogate decoder) vs 0.001036 (physics decoder); naive baseline numbers
+  from the train_inverse held-out evaluation printout.
+- Memorization audit (v3): `results/memorization_audit_v3.csv` — ratio
+  1.24×, distance-correlation +0.033.
+- [ ] Still to do before submitting: author/affiliation formatting per the
+      SPIE portal, and a final read-through against the 250-word limit.

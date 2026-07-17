@@ -36,10 +36,29 @@ n ∈ [1.48, 1.50]. Off-grid interpolation error is audited in
   the same inverse pipeline, fed rigorous physics, chooses a *different and
   correct* design.
 
-## 2. How to continue training (do this before anything else)
+## 2. How to continue training
 
-The full 5-seed paper protocol under v3 is one command on the training
-machine, from the project root:
+Already done on 2026-07-17, same day as the v3 revision (do NOT redo):
+surrogate seeds 0–4 at the full 150k/250 protocol
+(`results/surrogate_runs_v3.csv`), tandem seed 0 in BOTH decoder arms at
+150k/400 (`results/training_runs_v3.csv`), the v3 memorization audit, the
+neural-adjoint record search, and the rigorous verification of its winners.
+
+What training remains: inverse-net seeds 1–4 in both decoder arms, to power
+the paper's 5-v-5 tandem comparison table the way the v2 tables were powered.
+Either run the targeted loop:
+
+```bash
+for S in 1 2 3 4; do
+  python3 networks/train_inverse.py --pmma --decoder surrogate \
+      --samples 150000 --epochs 400 --batch 256 --seed $S
+  python3 networks/train_inverse.py --pmma --decoder physics \
+      --samples 150000 --epochs 400 --batch 256 --seed $S
+done
+```
+
+or just run the full overnight protocol, which includes it (extra surrogate
+seeds land as bonus statistical power; records only ever improve):
 
 ```bash
 bash overnight.sh                 # >= 12 h: 5 surrogate seeds + 5+5 tandem
@@ -120,6 +139,12 @@ what a **v4** would look like if reviewers demand it:
   blazed profile builders; topology optimization of grating profiles under
   conical incidence (#45) is the systematic version. This is follow-up-paper
   scope, not this paper.
+- **Engine hot-path micro-optimizations** (only if training scale grows):
+  `forward_model` interpolates η five times per call where two suffice (the
+  coupling term does not depend on field angle, and unpol = (TE+TM)/2), and
+  the 16-corner interpolation loop could be one batched gather. Both are
+  pure-speed refactors with zero physics effect; current training is ~9 min
+  per protocol seed, so they were deliberately left simple.
 
 ### (b) Optimization accuracy — boundary-loss neural adjoint
 The v2 record pinned n, α, L_corr (and, artifactually, depth) at bounds. The
