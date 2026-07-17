@@ -27,8 +27,8 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import res_path
 from physics.waveguide_physics import (
-    forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
-    tir_penalty, transmission_polarized, fov_window_deg,
+    ENGINE_VERSION, forward_model, use_pmma, sample_theta, normalize_theta,
+    denormalize_theta, tir_penalty, transmission_polarized, fov_window_deg,
 )
 
 N_STARTS = 300     # random starting designs
@@ -110,9 +110,10 @@ def optimize():
     print("\nSaved winners -> results/optimal_designs.csv")
 
     # hall of fame: keep the best design EVER seen across all runs; only
-    # updates when a new run beats the record
-    hof = res_path("best_design_ever_v2.csv")   # v2: records from the corrected (TIR-
-    # constrained, polarization-resolved) physics; v1 records are not comparable
+    # updates when a new run beats the record. Keyed on ENGINE_VERSION —
+    # records under different physics engines are not comparable (v1: pre-TIR
+    # leaky designs; v2: TIR-constrained scalar; v3: RCWA-calibrated coupling)
+    hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")
     prev_J = -1e9
     if os.path.exists(hof):
         with open(hof) as f:

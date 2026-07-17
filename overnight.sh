@@ -95,4 +95,4 @@ done
 
 ELAPSED_MIN=$(( ( $(date +%s) - T0 ) / 60 ))
 echo "Overnight run finished: $(date)   (total $((ELAPSED_MIN / 60))h $((ELAPSED_MIN % 60))m)" | tee -a "$LOG"
-echo "DONE. Open results_report.html and waveguide_3d.html; records live in results/best_design_ever_v2.csv"
+echo "DONE. Open results_report.html and waveguide_3d.html; records live in results/best_design_ever_v3.csv"

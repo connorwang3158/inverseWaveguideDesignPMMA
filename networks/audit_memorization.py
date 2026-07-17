@@ -8,8 +8,9 @@ Four tests, one figure:
   C. Per-design error vs distance to the nearest training example.
      A memorizing network gets worse the farther you move from its
      training points; a network that learned the function stays flat.
-  D. Test-set R^2 (MTF) across every independent retraining in
-     surrogate_runs.csv — memorization is seed-brittle, learning is stable.
+  D. Test-set R^2 (MTF) across every independent retraining in the current
+     engine's surrogate run table — memorization is seed-brittle, learning
+     is stable.
 """
 import csv
 import os
@@ -23,6 +24,12 @@ os.chdir(ROOT)  # figure/CSV paths resolve from the project root
 
 from networks.surrogate import (load_surrogate, make_dataset, r2_per_metric,
                                 TRAIN_SEED_BASE, VAL_SEED, TEST_SEED)
+from physics.waveguide_physics import ENGINE_VERSION
+
+# Test D pools retrainings from the CURRENT engine's run table only —
+# surrogates trained under different physics answer different regression
+# problems (v2-era rows stay in results/surrogate_runs.csv)
+RUNS_CSV = f"results/surrogate_runs_{ENGINE_VERSION}.csv"
 
 FRESH_SEED = 777777          # never used anywhere in the pipeline
 C_TRAIN, C_VAL, C_SURR, C_REF = "#2a78d6", "#1baf7a", "#eda100", "#e34948"
@@ -106,12 +113,15 @@ for b in range(nb):
     bx.append(dmin[sl].median().item()); by.append(err[sl].median().item())
 
 # --- D: R^2 stability across all independent retrainings ---------------
-rows = [r for r in csv.DictReader(open("results/surrogate_runs.csv"))
+if not os.path.exists(RUNS_CSV):
+    raise SystemExit(f"{RUNS_CSV} not found — no retrainings recorded under "
+                     f"the {ENGINE_VERSION} physics yet; run overnight.sh first")
+rows = [r for r in csv.DictReader(open(RUNS_CSV))
         if r["samples"] == "150000" and r["epochs"] == "250"
         and r["pmma"] == "1"]                       # paper protocol only
 if not rows:
     raise SystemExit("no paper-protocol rows (150000 samples / 250 epochs) in "
-                     "results/surrogate_runs.csv yet — run overnight.sh first")
+                     f"{RUNS_CSV} yet — run overnight.sh first")
 r2_mtf = [float(r["R2_MTF@40cyc/mm"]) for r in rows]
 # split retrainings into overnight runs by detecting seed resets — the
 # previous hardcoded row count (33) mislabeled runs whenever the history

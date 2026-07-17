@@ -210,3 +210,45 @@ v3 RCWA-labeled surrogate, where each training label becomes expensive.
     surrogate, cutting the required grcwa grid size.
     (AutoTandemML active-learning tandem is already listed as item 14 —
     the same label-efficiency argument applies.)
+
+### H. v3 follow-through & topology/manifold analysis (2026-07-17 scan)
+
+Added while implementing the v3 RCWA-calibrated coupling term. Same caveat as
+the whole file: verify every DOI/arXiv id before the manuscript cites it.
+
+42. Huang, Y., et al. TorchRDIT: eigendecomposition-free rigorous diffraction
+    interface theory in PyTorch. *Optics Express*, 32(8), 13986 (2024 code
+    line, 2025 releases). https://github.com/yi-huang-1/torchrdit — reported
+    up to ~16x faster than eigendecomposition RCWA with exact gradients; the
+    v4 candidate if the coupling term should ever be differentiated THROUGH
+    the rigorous solver instead of through the v3 interpolation table.
+    (Overlaps item 28; kept here because v3 makes the trade concrete.)
+43. Kim, C., & Lee, B. (2023). TORCWA: GPU-accelerated FMM and gradient-based
+    optimization for metasurface design. *Computer Physics Communications*,
+    282, 108552. https://doi.org/10.1016/j.cpc.2022.108552 — GPU RCWA with
+    autograd; alternative v4 backend (already Group D item 24; cross-ref).
+44. Meent: differentiable electromagnetic simulator for machine learning
+    (2024). arXiv:2406.12904 — RCWA with JAX/PyTorch backends and ML-ready
+    APIs; third v4 backend option, the most ML-tooling-complete of the three.
+45. Topology optimization of blazed gratings under conical incidence (2024).
+    arXiv:2403.10174 — adjoint/topological-derivative treatment of grating
+    profiles beyond binary teeth; the systematic way to open the design space
+    (blazed/slanted/freeform) once the binary-grating pipeline is published.
+46. Slanted-grating profile support already exists in rigorous_solver.py
+    (profile_slanted); Levola & Laakkonen (2007), *Opt. Express* 15, 2067
+    (slanted SRG in-couplers for exit-pupil expanders) is the canonical
+    anchor when that thread is opened. (†)
+47. Leykam, D., & Angelakis, D. G. (2021). Photonic band structure design
+    using persistent homology. *APL Photonics*, 6, 030802.
+    https://doi.org/10.1063/5.0041084 — precedent for using persistent
+    homology (topological data analysis) on photonic design spaces; the
+    method candidate for the equivalent-design manifold study (framework
+    S6.5): cluster the inverse net's many-to-one solution families by the
+    topology of their point cloud rather than by eyeballing scatter plots
+    (software: ripser / giotto-tda).
+48. Pommet, D. A., Moharam, M. G., & Grann, E. B. (1994). Limits of scalar
+    diffraction theory for diffractive phase elements. *JOSA A*, 11(6),
+    1827. https://doi.org/10.1364/JOSAA.11.001827 — the quantitative basis
+    for WHY v3 was necessary at 430-449 nm periods; cite next to the v3
+    calibration description. (Was cited informally in code comments since
+    the 2026-07-13 audit; promoted to the bibliography with v3.)

@@ -15,14 +15,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path, root_path
 
 FILES = [
-    ("Forward surrogate runs (physics-learning table)", "surrogate_runs.csv"),
-    ("Inverse-network training runs (5-seed protocol table)", "training_runs.csv"),
+    ("Forward surrogate runs — v3 RCWA-calibrated engine", "surrogate_runs_v3.csv"),
+    ("Inverse-network training runs — v3 engine", "training_runs_v3.csv"),
+    ("Forward surrogate runs (v2 engine, archived table)", "surrogate_runs.csv"),
+    ("Inverse-network training runs (v2 engine, archived table)", "training_runs.csv"),
     ("Neural-adjoint winners (network-found, physics-verified)", "optimal_designs_na.csv"),
-    ("All-time best design (corrected physics)", "best_design_ever_v2.csv"),
+    ("All-time best design — v3 RCWA-calibrated physics", "best_design_ever_v3.csv"),
+    ("All-time best design (v2 physics, archived record)", "best_design_ever_v2.csv"),
     ("Optimal designs (gradient-baseline winners)", "optimal_designs.csv"),
     ("Trade-off sweep (priority menu)", "pareto_results.csv"),
+    ("RCWA calibration grid: off-grid interpolant audit (v3 evidence)",
+     "rcwa_calibration_check.csv"),
     ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
-    ("RCWA check of neural-adjoint winners (scalar-validity audit)",
+    ("RCWA check of neural-adjoint winners — v3 engine",
+     "design_rcwa_check_na_v3.csv"),
+    ("RCWA check of neural-adjoint winners (v2-era scalar-validity audit)",
      "design_rcwa_check_na.csv"),
     ("Memorization audit (numbers)", "memorization_audit.csv"),
 ]

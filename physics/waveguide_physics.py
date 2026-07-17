@@ -71,6 +71,31 @@ Remaining L1 heuristics (documented, flagged, verified at L2 by RCWA where
 possible): roughness-MTF coefficient, grating/coupler MTF coefficients,
 Payne-Lacey correlation weighting S(Lc), coupler acceptance width. Constants
 marked `# SYNC` must still be reconciled with the Paper-1 repo values.
+
+============================ v3 PHYSICS REVISION ==============================
+RCWA-CALIBRATED GRATING COUPLING (PMMA mode). The 2026-07-13 rigor audit
+(results/design_rcwa_check_na.csv) showed that at the TIR-mandated PMMA
+periods (430-449 nm, below the visible wavelengths) the scalar first-order
+efficiency overestimates rigorous RCWA by ~5x at 532 nm and ~15x at 635 nm,
+and drives the depth optimum to the 400 nm bound when the rigorous optimum is
+near 200 nm (Pommet et al., JOSA A 11, 1827 (1994) predict exactly this
+scalar breakdown at ~lambda-scale features). In PMMA mode the engine now
+interpolates eta_1(period, depth, duty; lambda, pol) from a rigorous grcwa
+grid (physics/rcwa_eta_grid.npz, built by physics/calibrate_rcwa.py,
+off-grid-verified in results/rcwa_calibration_check.csv). Consequences:
+  * absolute transmission and the depth optimum are now quoted at the
+    rigorous (L2) level inside the design loop itself;
+  * grating coupling is polarization-resolved (TE vs TM), completing FIX-3 —
+    scalar theory was pol-blind;
+  * the grid carries its own refractive-index axis (n = 1.48/1.49/1.50):
+    eta_TM was measured to move ~20% across the PMMA index bounds, so n
+    interpolates like the geometry instead of being pinned at the midpoint;
+  * full-material mode (use_full) keeps the scalar term — the grid covers
+    only the PMMA window; full-space numbers remain v2-level accuracy;
+  * records/tables from the v2 engine are NOT comparable — searchers key
+    their hall-of-fame and run tables on ENGINE_VERSION below.
+The physics-probe checkpoint system (networks/surrogate.py) detects this
+revision automatically and refuses stale v2-trained surrogates.
 ===============================================================================
 
 Design vector theta (8, physical units):
@@ -90,7 +115,15 @@ Spec vector y (4):
   [3] transmission at design field angle FOV_DEG (guiding-aware)
 """
 
+import os
+
 import torch
+
+# Engine revision. Bumped whenever the physics changes enough to reset
+# cross-run comparability (v2 = TIR-constrained scalar coupling; v3 =
+# RCWA-calibrated coupling). Searchers and run tables key their output
+# filenames on this so records from different engines never mix.
+ENGINE_VERSION = "v3"
 
 # RGB design wavelengths (nm), matching Paper 1
 WL = torch.tensor([450.0, 532.0, 635.0])
@@ -157,8 +190,12 @@ def use_pmma():
     BOUNDS.copy_(PMMA_BOUNDS)
     FOV_DEG = 5.0
     PMMA_MODE = True
+    _rcwa_grid()   # v3: fail loudly NOW if the calibration grid is missing —
+    # a silent scalar fallback would be exactly the "stale physics steering"
+    # bug class the checkpoint probe system exists to prevent
     print("[physics] PMMA-only mode: material pinned, geometry free, "
-          f"period restricted to RGB-guided window, FOV metric at {FOV_DEG:.0f} deg")
+          f"period restricted to RGB-guided window, FOV metric at "
+          f"{FOV_DEG:.0f} deg, RCWA-calibrated coupling ({ENGINE_VERSION})")
 
 
 PMMA_MODE = False
@@ -173,6 +210,79 @@ def use_full():
     BOUNDS.copy_(FULL_BOUNDS)
     FOV_DEG = _FULL_FOV_DEG
     PMMA_MODE = False
+
+
+# ----------------------------------------------------------------------------
+# v3: RCWA-calibrated grating coupling (see the v3 PHYSICS REVISION block)
+# ----------------------------------------------------------------------------
+
+_RCWA_GRID_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "rcwa_eta_grid.npz")
+_RCWA_GRID = None
+
+
+def _rcwa_grid():
+    """Lazy-load the rigorous calibration grid built by calibrate_rcwa.py.
+    eta has shape [pol(TE,TM), wl(450,532,635), n, period, depth, duty]."""
+    global _RCWA_GRID
+    if _RCWA_GRID is None:
+        import numpy as np
+        if not os.path.exists(_RCWA_GRID_PATH):
+            raise SystemExit(
+                f"{_RCWA_GRID_PATH} not found — the {ENGINE_VERSION} engine's "
+                "RCWA-calibrated coupling term needs it. Build it once with:\n"
+                "    python3 physics/calibrate_rcwa.py")
+        d = np.load(_RCWA_GRID_PATH)
+        g = {k: torch.as_tensor(d[k], dtype=torch.get_default_dtype())
+             for k in ("ns", "periods", "depths", "duties", "eta")}
+        g["eta_unpol"] = g["eta"].mean(dim=0)
+        # normalizer for the coupler-MTF heuristic: the grid's own unpolarized
+        # ceiling at 532 nm (the scalar 4/pi^2 ceiling no longer applies)
+        g["coup_ceil_532"] = g["eta_unpol"][1].max()
+        _RCWA_GRID = g
+    return _RCWA_GRID
+
+
+def _axis_lerp(axis: torch.Tensor, q: torch.Tensor):
+    """Left indices + fractional weights for linear interpolation of q on a
+    sorted 1-D axis. q is clamped to the axis range (queries only leave it by
+    numerical noise — BOUNDS and the grid cover the same window); gradients
+    flow through the fractional weight."""
+    qc = q.clamp(axis[0].item(), axis[-1].item())
+    idx = torch.searchsorted(axis, qc.detach().contiguous(), right=True)
+    idx = idx.clamp(1, len(axis) - 1)
+    x0, x1 = axis[idx - 1], axis[idx]
+    return idx - 1, (qc - x0) / (x1 - x0)
+
+
+def _interp_eta(grid, n, period, depth, duty, wl_idx: int = 1,
+                pol: str = "unpol") -> torch.Tensor:
+    """Differentiable multilinear interpolation of the rigorous first-order
+    coupling efficiency over (n, period, depth, duty) at one RGB wavelength
+    (wl_idx 0/1/2 = 450/532/635 nm) and polarization ('TE'|'TM'|'unpol').
+    Piecewise-linear, so exact at grid nodes; the off-grid error is audited
+    in results/rcwa_calibration_check.csv. The n axis is real physics, not
+    padding: eta_TM moves ~20% across the PMMA bounds [1.48, 1.50]."""
+    tab = {"TE": grid["eta"][0], "TM": grid["eta"][1],
+           "unpol": grid["eta_unpol"]}[pol][wl_idx]           # [N,P,D,U]
+    hn, fn = _axis_lerp(grid["ns"], n)
+    ip, fp = _axis_lerp(grid["periods"], period)
+    jd, fd = _axis_lerp(grid["depths"], depth)
+    ku, fu = _axis_lerp(grid["duties"], duty)
+    eta = torch.zeros_like(fp)
+    for dn, wn in ((0, 1 - fn), (1, fn)):
+        for dp, wp in ((0, 1 - fp), (1, fp)):
+            for dd, wd in ((0, 1 - fd), (1, fd)):
+                for du, wu in ((0, 1 - fu), (1, fu)):
+                    eta = eta + (wn * wp * wd * wu
+                                 * tab[hn + dn, ip + dp, jd + dd, ku + du])
+    return eta
+
+
+def eta_rcwa(n, period, depth, duty, wl_idx: int = 1,
+             pol: str = "unpol") -> torch.Tensor:
+    """RCWA-calibrated first-order coupling efficiency (v3, PMMA window)."""
+    return _interp_eta(_rcwa_grid(), n, period, depth, duty, wl_idx, pol)
 
 
 def sample_theta(n_samples: int, generator=None) -> torch.Tensor:
@@ -329,17 +439,23 @@ def _transmission_pol(theta: torch.Tensor, field_deg: float,
     S_corr = 1.0 / (1.0 + (Lc / 3e5))
     T_scatter = torch.exp(-per_bounce * S_corr * NB)
 
-    # --- Grating coupling: scalar-diffraction first-order efficiency of a
-    #     binary phase grating (Goodman, Fourier Optics; O'Shea et al.):
-    #         eta_1 = 4 (sin(pi*duty)/pi)^2 sin^2(phi/2),
-    #         phi   = 2 pi depth (n-1)/lambda
-    #     Ceiling 4/pi^2 ~ 40.5% at duty=0.5, phi=pi. Scalar theory is
-    #     polarization-blind — per-pol efficiencies are verified by RCWA
-    #     (rigorous_solver.py; Pommet et al. 1994 quantify the scalar error at
-    #     ~1-lambda features). Angular acceptance applies to the in-coupler
-    #     only (FIX-5); the out-coupler sees the guided angle by construction.
-    phi = 2 * torch.pi * depth * (n - 1.0) / lam_g
-    eta = 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
+    # --- Grating coupling (v3). PMMA mode: rigorous RCWA-calibrated
+    #     first-order efficiency, interpolated per polarization from the grcwa
+    #     grid — at the sub-wavelength PMMA periods scalar theory overshoots
+    #     ~5-15x and is polarization-blind (see the v3 REVISION block).
+    #     Full-material mode keeps the scalar binary-phase-grating formula
+    #     (Goodman, Fourier Optics): eta_1 = 4 (sin(pi*duty)/pi)^2 sin^2(phi/2),
+    #     phi = 2 pi depth (n-1)/lambda, ceiling 4/pi^2 ~ 40.5% — the grid
+    #     covers only the PMMA window (Pommet et al. 1994 quantify the scalar
+    #     error at ~1-lambda features). Angular acceptance applies to the
+    #     in-coupler only (FIX-5); the out-coupler sees the guided angle by
+    #     construction.
+    if PMMA_MODE:
+        eta = eta_rcwa(n, period, depth, duty, wl_idx=1, pol=pol)
+    else:
+        phi = 2 * torch.pi * depth * (n - 1.0) / lam_g
+        eta = (4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2
+               * torch.sin(phi / 2) ** 2)
     s_i = torch.sin(torch.deg2rad(torch.tensor(float(field_deg),
                                                device=theta.device)))
     accept = torch.exp(-(s_i / ACCEPT_SIN) ** 2)
@@ -440,9 +556,16 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
 
     # 5) Coupler MTF: contrast degradation from finite diffraction efficiency
     #    across two coupling events (Goodsell et al. 2024 framing); eta
-    #    normalized by the 4/pi^2 scalar ceiling (heuristic L1)  # SYNC
-    eta = 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
-    mtf_coup = 0.80 + 0.20 * (eta / 0.4053)
+    #    normalized by its attainable ceiling — the grid's own unpolarized
+    #    532 nm maximum in PMMA mode (v3), the 4/pi^2 scalar ceiling in the
+    #    full space (heuristic L1)  # SYNC
+    if PMMA_MODE:
+        eta = eta_rcwa(n, period, depth, duty, wl_idx=1, pol="unpol")
+        mtf_coup = 0.80 + 0.20 * (eta / _rcwa_grid()["coup_ceil_532"])
+    else:
+        eta = (4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2
+               * torch.sin(phi / 2) ** 2)
+        mtf_coup = 0.80 + 0.20 * (eta / 0.4053)
 
     return mtf_diff * mtf_rough * mtf_chrom * mtf_grat * mtf_coup
 
@@ -488,3 +611,14 @@ if __name__ == "__main__":
     bad = th.detach().clone()
     bad[:, 5] = 680.0  # old exploit period — outside the guided window
     print("unguided-design T (must be ~0):", transmission(bad).max().item())
+    # v3 sanity: calibrated coupling at the v2 record design (n=1.5, period
+    # 438 nm, depth 400 nm, duty 0.5) must reproduce the 2026-07-13 rigorous
+    # audit (TE 0.0479, TM 0.0878, unpol 0.0679), nowhere near the scalar
+    # 0.347 the v2 engine used
+    rec = (torch.tensor([1.5]), torch.tensor([437.98]),
+           torch.tensor([400.0]), torch.tensor([0.5001]))
+    e_te = eta_rcwa(*rec, wl_idx=1, pol="TE")
+    e_tm = eta_rcwa(*rec, wl_idx=1, pol="TM")
+    print(f"v3 eta at v2 record (532nm): TE {e_te.item():.4f} TM {e_tm.item():.4f} "
+          f"unpol {(0.5*(e_te+e_tm)).item():.4f}  (rigorous audit: TE 0.0479 "
+          f"TM 0.0878 unpol 0.0679; scalar wrongly said 0.347)")

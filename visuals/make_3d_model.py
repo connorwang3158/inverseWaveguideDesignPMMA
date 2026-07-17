@@ -44,7 +44,8 @@ def load_best_design():
     """Pull the winning design out of the result CSVs, if any exist."""
     cols = {"t_mm": "t(mm)", "period_nm": "period(nm)",
             "depth_nm": "depth(nm)", "duty": "duty", "n": "n"}
-    for name in ("optimal_designs_na.csv", "best_design_ever_v2.csv"):
+    for name in ("optimal_designs_na.csv", "best_design_ever_v3.csv",
+                 "best_design_ever_v2.csv"):
         path = res_path(name)
         if not os.path.exists(path):
             continue

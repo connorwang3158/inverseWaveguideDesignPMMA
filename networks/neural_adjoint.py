@@ -26,9 +26,10 @@ Usage (from the project root):
 Outputs:
     results/optimal_designs_na.csv    top designs (surrogate-found, physics-verified)
     figures/neural_adjoint_run.png    search trajectory + surrogate-vs-physics parity
-    results/best_design_ever_v2.csv   all-time hall of fame (physics-scored, shared
-                                 with optimize_pmma.py; v2 = records under the
-                                 corrected TIR-constrained physics)
+    results/best_design_ever_<ver>.csv  all-time hall of fame (physics-scored,
+                                 shared with optimize_pmma.py; keyed on the
+                                 physics ENGINE_VERSION so records from
+                                 different engines never mix)
 """
 
 import argparse
@@ -42,7 +43,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path
 from physics.waveguide_physics import (
-    SPEC_SCALE, forward_model, sample_theta, normalize_theta,
+    ENGINE_VERSION, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
     denormalize_theta, tir_penalty,
 )
 from networks.surrogate import load_surrogate
@@ -135,9 +136,11 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     print("\nSaved winners -> results/optimal_designs_na.csv")
 
     # hall of fame (shared with optimize_pmma.py): physics-scored record only.
-    # v2 = records under the corrected (TIR-constrained, polarization-resolved)
-    # physics; v1 records were set by leaky designs and are not comparable.
-    hof, prev_J = res_path("best_design_ever_v2.csv"), -1e9
+    # Keyed on ENGINE_VERSION — records under different physics engines are
+    # not comparable (v1: pre-TIR leaky designs; v2: TIR-constrained scalar
+    # coupling; v3: RCWA-calibrated coupling).
+    hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")
+    prev_J = -1e9
     if os.path.exists(hof):
         with open(hof) as f:
             try:
