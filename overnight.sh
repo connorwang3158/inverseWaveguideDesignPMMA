@@ -68,8 +68,9 @@ $CAF python3 networks/neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS
 $CAF python3 baselines/optimize_pmma.py   >> "$LOG" 2>&1
 $CAF python3 baselines/sweep_pareto.py    >> "$LOG" 2>&1
 
-mark "stage 5/6: figures, 3D model, report"
+mark "stage 5/6: figures, 3D model, audit, report"
 python3 visuals/make_3d_model.py        >> "$LOG" 2>&1
+python3 networks/audit_memorization.py  >> "$LOG" 2>&1
 python3 visuals/make_report.py          >> "$LOG" 2>&1
 
 # ---- stage 6: spend the remaining budget. Each lap = one extra surrogate
@@ -87,6 +88,7 @@ while [ $(( $(date +%s) - T0 )) -lt $(( HOURS * 3600 )) ]; do
   $CAF python3 networks/neural_adjoint.py --starts "$NA_STARTS" --steps "$NA_STEPS" \
     --seed "$EXTRA" >> "$LOG" 2>&1
   python3 visuals/make_3d_model.py >> "$LOG" 2>&1
+  python3 networks/audit_memorization.py >> "$LOG" 2>&1
   python3 visuals/make_report.py   >> "$LOG" 2>&1
   EXTRA=$((EXTRA + 1))
 done
