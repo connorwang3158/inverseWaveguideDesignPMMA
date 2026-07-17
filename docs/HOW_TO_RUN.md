@@ -157,6 +157,7 @@ range of "best validation spec-MSE" from `results/training_runs.csv` /
 | `No module named numpy/matplotlib` | `pip3 install numpy matplotlib` |
 | `forward_surrogate.pt not found` | run `python3 networks/surrogate.py --pmma` first — the other scripts need the trained surrogate |
 | `trained under a DIFFERENT waveguide_physics.py` | the physics engine changed since the surrogate was trained; retrain with `python3 networks/surrogate.py --pmma` (the overnight script does this automatically) |
+| `rcwa_eta_grid.npz not found` | the v3 engine's rigorous coupling table is missing from `physics/` (it ships with the repo); rebuild it once with `pip3 install grcwa` then `python3 physics/calibrate_rcwa.py` (~10 min), and expect to retrain afterwards |
 | `No such file or directory` on `cd` | type `cd `, drag the project folder into the terminal, Enter |
 | 3D page won't load | the viewer is fully self-contained (no internet needed) — try another browser, or open `waveguide_model.stl` in any 3D viewer instead |
 | Overnight run died partway | rerun `bash overnight.sh` — records only improve, never regress |

@@ -31,8 +31,8 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import ckpt_path, fig_path, res_path
 from physics.waveguide_physics import (
-    forward_model, sample_theta, denormalize_theta, normalize_theta,
-    normalize_spec, use_pmma,
+    ENGINE_VERSION, forward_model, sample_theta, denormalize_theta,
+    normalize_theta, normalize_spec, use_pmma,
 )
 
 
@@ -148,7 +148,9 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
 
     # permanent record: one line per training run, for the paper's 5-seed table
     import csv
-    runs_csv = res_path("training_runs.csv")
+    # keyed on the physics engine version, like surrogate_runs (v2-era rows
+    # live in training_runs.csv and are not comparable across engines)
+    runs_csv = res_path(f"training_runs_{ENGINE_VERSION}.csv")
     new = not os.path.exists(runs_csv)
     with open(runs_csv, "a", newline="") as f:
         wcsv = csv.writer(f)
@@ -157,7 +159,7 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
                            "lr", "iterations", "best_val_specMSE"])
         wcsv.writerow([seed, decoder, n_train, epochs, batch, lr,
                        steps_per_epoch * epochs, f"{best_va:.6f}"])
-    print("Appended run summary -> results/training_runs.csv")
+    print(f"Appended run summary -> {runs_csv}")
 
     try:  # loss curve figure — visual record of the training run
         import matplotlib

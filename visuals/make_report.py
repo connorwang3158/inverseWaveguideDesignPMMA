@@ -13,18 +13,33 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path, root_path
+from physics.waveguide_physics import ENGINE_VERSION as EV
 
+# current-engine tables derive their names from ENGINE_VERSION so an engine
+# bump can never leave the report rendering a stale era as "current"; the
+# v2-era archives are frozen literals on purpose
 FILES = [
-    ("Forward surrogate runs (physics-learning table)", "surrogate_runs.csv"),
-    ("Inverse-network training runs (5-seed protocol table)", "training_runs.csv"),
+    (f"Forward surrogate runs — {EV} RCWA-calibrated engine",
+     f"surrogate_runs_{EV}.csv"),
+    (f"Inverse-network training runs — {EV} engine", f"training_runs_{EV}.csv"),
+    ("Forward surrogate runs (v2 engine, archived table)", "surrogate_runs.csv"),
+    ("Inverse-network training runs (v2 engine, archived table)", "training_runs.csv"),
     ("Neural-adjoint winners (network-found, physics-verified)", "optimal_designs_na.csv"),
-    ("All-time best design (corrected physics)", "best_design_ever_v2.csv"),
+    (f"All-time best design — {EV} RCWA-calibrated physics",
+     f"best_design_ever_{EV}.csv"),
+    ("All-time best design (v2 physics, archived record)", "best_design_ever_v2.csv"),
     ("Optimal designs (gradient-baseline winners)", "optimal_designs.csv"),
     ("Trade-off sweep (priority menu)", "pareto_results.csv"),
+    (f"RCWA calibration grid: off-grid interpolant audit ({EV} evidence)",
+     "rcwa_calibration_check.csv"),
     ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
-    ("RCWA check of neural-adjoint winners (scalar-validity audit)",
+    (f"RCWA check of neural-adjoint winners — {EV} engine",
+     f"design_rcwa_check_na_{EV}.csv"),
+    ("RCWA check of neural-adjoint winners (v2-era scalar-validity audit)",
      "design_rcwa_check_na.csv"),
-    ("Memorization audit (numbers)", "memorization_audit.csv"),
+    (f"Memorization audit — {EV} engine (numbers)",
+     f"memorization_audit_{EV}.csv"),
+    ("Memorization audit (v2 engine, archived numbers)", "memorization_audit.csv"),
 ]
 IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
           ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
