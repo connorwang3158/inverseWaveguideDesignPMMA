@@ -32,13 +32,34 @@ net = load_surrogate()       # verifies the physics probe, restores bounds
 ck = torch.load(os.path.join(ROOT, "checkpoints/forward_surrogate.pt"),
                 weights_only=True)
 seed, n_train = ck["seed"], ck["n_train"]
-print(f"deployed checkpoint: seed {seed}, n_train {n_train}")
+
+# Resolve the dataset seed this checkpoint was ACTUALLY trained with. New
+# checkpoints store it ("train_seed"). Legacy checkpoints (no "cmp_val" key)
+# predate the seed-collision fix and used the old mapping 100+seed; assuming
+# the current mapping for them would rebuild a dataset the network never saw
+# — the "training data" bar in test A would silently be a fourth unseen set,
+# and test C's distance-to-training-data would measure the wrong point cloud.
+if "train_seed" in ck:
+    train_seed = ck["train_seed"]
+elif "cmp_val" in ck:
+    train_seed = TRAIN_SEED_BASE + seed
+else:
+    train_seed = 100 + seed          # legacy era mapping
+    if train_seed in (VAL_SEED, TEST_SEED):
+        raise SystemExit(
+            "deployed legacy checkpoint was trained with the seed-collision "
+            "bug (its training data IS the val/test set) — retrain before "
+            "auditing")
+print(f"deployed checkpoint: seed {seed}, n_train {n_train}, "
+      f"training-data seed {train_seed}"
+      + (" (legacy mapping)" if "train_seed" not in ck and "cmp_val" not in ck
+         else ""))
 
 # --- A: score the SAME network on four datasets -------------------------
 sets = {}
-z_tr, y_tr = make_dataset(n_train, seed=TRAIN_SEED_BASE + seed)  # its own food
+z_tr, y_tr = make_dataset(n_train, seed=train_seed)              # its own food
 sets["its own\ntraining data"] = (z_tr, y_tr)
-sets["validation set\n(never trained on)"] = make_dataset(15000, seed=VAL_SEED)
+sets["model-selection set\n(not trained on)"] = make_dataset(15000, seed=VAL_SEED)
 sets["test set\n(never trained on)"] = make_dataset(15000, seed=TEST_SEED)
 sets["brand-new set\n(generated today)"] = make_dataset(15000, seed=FRESH_SEED)
 
@@ -51,6 +72,9 @@ with torch.no_grad():
         print(f"{name.replace(chr(10),' '):40s} MSE {mse[name]:.3e}  "
               f"R2 {[f'{v:.5f}' for v in r2_all[name].tolist()]}")
 
+# the headline ratio uses the brand-new set, which was never used for
+# training OR model selection (the val set picked the best epoch and the
+# best checkpoint, so it is not fully independent evidence)
 ratio = mse["brand-new set\n(generated today)"] / mse["its own\ntraining data"]
 print(f"\nnever-seen / training error ratio: {ratio:.2f}x "
       f"(memorization would be 100-10000x)")
@@ -83,11 +107,24 @@ for b in range(nb):
 
 # --- D: R^2 stability across all independent retrainings ---------------
 rows = [r for r in csv.DictReader(open("results/surrogate_runs.csv"))
-        if r["samples"] == "150000" and r["epochs"] == "250"]  # paper protocol
+        if r["samples"] == "150000" and r["epochs"] == "250"
+        and r["pmma"] == "1"]                       # paper protocol only
+if not rows:
+    raise SystemExit("no paper-protocol rows (150000 samples / 250 epochs) in "
+                     "results/surrogate_runs.csv yet — run overnight.sh first")
 r2_mtf = [float(r["R2_MTF@40cyc/mm"]) for r in rows]
-n_run2 = 33                                  # rows appended by the new run
-print(f"{len(rows)} independent retrainings; R2_MTF min {min(r2_mtf):.5f} "
-      f"max {max(r2_mtf):.5f}")
+# split retrainings into overnight runs by detecting seed resets — the
+# previous hardcoded row count (33) mislabeled runs whenever the history
+# didn't match it (here run 2 actually appended 31 rows, run 1 had 42)
+seeds_hist = [int(r["seed"]) for r in rows]
+run_id, cur = [], 0
+for i, s in enumerate(seeds_hist):
+    if i > 0 and s <= seeds_hist[i - 1]:
+        cur += 1
+    run_id.append(cur)
+n_runs = cur + 1
+print(f"{len(rows)} independent retrainings across {n_runs} overnight runs; "
+      f"R2_MTF min {min(r2_mtf):.5f} max {max(r2_mtf):.5f}")
 
 # --- figure -------------------------------------------------------------
 import matplotlib
@@ -135,12 +172,12 @@ axC.set_title(f"C — Error does NOT grow away from the training data\n"
               f"positive)", fontsize=10)
 axC.grid(alpha=0.25); axC.legend(fontsize=8, loc="upper right")
 
-x1 = range(1, len(r2_mtf) - n_run2 + 1)
-x2 = range(len(r2_mtf) - n_run2 + 1, len(r2_mtf) + 1)
-axD.scatter(x1, r2_mtf[:-n_run2], s=18, color=C_TRAIN, edgecolors="none",
-            label="overnight run 1")
-axD.scatter(x2, r2_mtf[-n_run2:], s=18, color=C_VAL, edgecolors="none",
-            label="overnight run 2")
+run_cols = [C_TRAIN, C_VAL, C_SURR, C_REF, C_IDENT]
+for rid in range(n_runs):
+    xs = [i + 1 for i, r in enumerate(run_id) if r == rid]
+    ys = [r2_mtf[i] for i, r in enumerate(run_id) if r == rid]
+    axD.scatter(xs, ys, s=18, color=run_cols[rid % len(run_cols)],
+                edgecolors="none", label=f"overnight run {rid + 1}")
 axD.axhline(1.0, color=C_IDENT, lw=1, ls="--")
 axD.set_ylim(min(r2_mtf) - 0.0005, 1.0006)
 axD.set_xlabel("independent retraining # (fresh network + fresh data each time)")
@@ -165,6 +202,8 @@ with open(os.path.join(ROOT, "results/memorization_audit.csv"), "w",
         w.writerow([n.replace("\n", " "), f"{mse[n]:.6e}"] +
                    [f"{v:.5f}" for v in r2_all[n].tolist()])
     w.writerow([])
+    w.writerow(["deployed_checkpoint_seed", seed])
+    w.writerow(["training_data_seed_used_for_audit", train_seed])
     w.writerow(["never_seen_over_train_error_ratio", f"{ratio:.2f}"])
     w.writerow(["corr_error_vs_distance_to_training", f"{corr:+.3f}"])
 print("saved -> results/memorization_audit.csv")
