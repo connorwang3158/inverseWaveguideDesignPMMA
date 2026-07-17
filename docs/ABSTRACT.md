@@ -36,7 +36,7 @@ replaces scalar grating-coupling theory — which we show overestimates
 first-order coupling efficiency 5–15× at the TIR-mandated sub-wavelength
 periods (430–449 nm) — with a polarization-resolved efficiency term
 calibrated to 90,090 rigorous RCWA solutions over index, period, depth, and
-duty cycle (interpolation error ⟨v3⟩ ≈2×10⁻³, audited against off-grid
+duty cycle (mean interpolation error 5.6×10⁻⁴, audited against off-grid
 solves). A forward surrogate network reproduces this engine with held-out
 R² ≥ 0.998 across all metrics and passes a four-test memorization audit; a
 tandem inverse network trained through the frozen forward model resolves the
@@ -44,8 +44,11 @@ one-to-many inverse problem, recovering designs that meet requested
 specifications in milliseconds; and a neural-adjoint search over the trained
 surrogate discovers record designs. Rigorous calibration qualitatively
 changes the optimum: the best design's grating depth moves from the
-scalar-theory bound (400 nm) to an interior optimum near ⟨v3⟩ 200 nm, with
-transmission quoted at rigorous rather than scalar accuracy. The framework
+scalar-theory bound (400 nm) to an interior optimum at ≈200 nm and its duty
+cycle from 0.5 to ≈0.41, with transmission quoted at rigorous rather than
+scalar accuracy (1.3% double-coupler, in line with reported single-digit
+system efficiencies for diffractive combiners) and MTF at 40 cyc/mm
+improving to 0.78. The framework
 provides a template for physics-honest, system-level inverse design of
 consumer-grade polymer waveguides.
 

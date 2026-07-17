@@ -204,7 +204,10 @@ out = os.path.join(ROOT, "figures/memorization_audit.png")
 fig.savefig(out, dpi=150)
 print(f"saved -> {out}")
 
-with open(os.path.join(ROOT, "results/memorization_audit.csv"), "w",
+# CSV is engine-version-keyed like the run tables (the v2-era audit
+# stays archived in results/memorization_audit.csv)
+with open(os.path.join(ROOT,
+          f"results/memorization_audit_{ENGINE_VERSION}.csv"), "w",
           newline="") as f:
     w = csv.writer(f)
     w.writerow(["dataset", "MSE", "R2_MTF", "R2_T", "R2_chrom", "R2_Tfov"])
@@ -216,4 +219,4 @@ with open(os.path.join(ROOT, "results/memorization_audit.csv"), "w",
     w.writerow(["training_data_seed_used_for_audit", train_seed])
     w.writerow(["never_seen_over_train_error_ratio", f"{ratio:.2f}"])
     w.writerow(["corr_error_vs_distance_to_training", f"{corr:+.3f}"])
-print("saved -> results/memorization_audit.csv")
+print(f"saved -> results/memorization_audit_{ENGINE_VERSION}.csv")

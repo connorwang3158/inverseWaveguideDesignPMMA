@@ -31,7 +31,8 @@ FILES = [
      "design_rcwa_check_na_v3.csv"),
     ("RCWA check of neural-adjoint winners (v2-era scalar-validity audit)",
      "design_rcwa_check_na.csv"),
-    ("Memorization audit (numbers)", "memorization_audit.csv"),
+    ("Memorization audit — v3 engine (numbers)", "memorization_audit_v3.csv"),
+    ("Memorization audit (v2 engine, archived numbers)", "memorization_audit.csv"),
 ]
 IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
           ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
