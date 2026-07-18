@@ -123,7 +123,31 @@ import torch
 # cross-run comparability (v2 = TIR-constrained scalar coupling; v3 =
 # RCWA-calibrated coupling). Searchers and run tables key their output
 # filenames on this so records from different engines never mix.
-ENGINE_VERSION = "v3"
+ENGINE_VERSION = "v4"
+
+# Source spectral width per display primary (LED FWHM, nm). Drives the
+# non-cancelling chromatic metric (FIX-8) and the finite-bandwidth chromatic
+# MTF (FIX-9). Typical micro-LED / LED-illuminated LCoS primaries: 20-25 nm.
+LED_FWHM_NM = 25.0
+
+# FIX-11 (v4): n IS A MATERIAL PROPERTY, NOT THREE FREE CHOICES. The design
+# variable theta[0] is the index AT GREEN (532 nm); in PMMA mode the blue and
+# red indices follow PMMA's Sellmeier dispersion (Sultanova, Kasarova &
+# Nikolov, Acta Phys. Pol. A 116, 585 (2009)): n(450)=1.5006, n(532)=1.4937,
+# n(635)=1.4886 -> fixed offsets relative to green. The v3 engine let the
+# optimizer pick a single n=1.500 for all three colours — a value PMMA does
+# not have at red, exactly where the x < n constraint binds (2026-07-17
+# audit, §2.8). Offsets are zero in full-material mode (unknown material).
+PMMA_DISP_OFFSET = torch.tensor([+0.00692, 0.0, -0.00506])  # B, G, R vs green
+_DISP_ACTIVE = False  # toggled by use_pmma()/use_full()
+
+
+def n_rgb(n: torch.Tensor) -> torch.Tensor:
+    """Per-primary refractive index [B,3]: design n (green) + material
+    dispersion offsets (PMMA mode only)."""
+    off = PMMA_DISP_OFFSET.to(n.device) if _DISP_ACTIVE \
+        else torch.zeros(3, device=n.device)
+    return n.unsqueeze(1) + off.unsqueeze(0)
 
 # RGB design wavelengths (nm), matching Paper 1
 WL = torch.tensor([450.0, 532.0, 635.0])
@@ -137,9 +161,20 @@ PUPIL_MM = 3.0                # eye pupil diameter (Watson 2013 diffraction limi
 EYE_FL_MM = 17.0              # reduced-eye focal length
 L_PROP_MM = 20.0              # in-coupler -> out-coupler propagation distance
 N_BOUNCE_MAX = 60.0           # numerical ceiling on bounce count
-RESID_DISP = 0.10             # residual chromatic dispersion fraction reaching
-                              # the retina (matched couplers cancel most of the
-                              # in-guide dispersion)  # SYNC calibration
+RESID_DISP = 0.001            # v4 (FIX-9): residual dispersion fraction
+                              # reaching the retina. For matched in/out coupler
+                              # periods the out-coupler cancels the in-guide
+                              # dispersion EXACTLY for a collimated input
+                              # (sin(th_out) = n sin(th_d) - lambda/period
+                              # = sin(th_i), wavelength-independent), including
+                              # within each primary's band. What survives is
+                              # the in/out PERIOD MISMATCH from fabrication:
+                              # d(sin th_out) = (lambda/period)(dP/P). NIL
+                              # period reproducibility ~0.1% -> 0.001. The v3
+                              # value 0.10 was an uncalibrated fudge that both
+                              # exaggerated retinal colour 100x and created
+                              # the fringe-lottery failure (2026-07-17 audit
+                              # §2.1/§2.4).
 ACCEPT_SIN = 0.35             # in-coupler angular acceptance width (sin space)
                               # cf. Zhao et al., Opt. Express 32, 12340 (2024)  # SYNC
 FOV_DEG = 20.0                # design half-field angle for the FOV metric
@@ -186,10 +221,11 @@ def use_pmma():
     window of a n=1.49 single-layer waveguide is only a few degrees wide
     (a direct consequence of FIX-1's guiding inequality), so evaluating at
     20 deg would return an honest-but-uninformative 0 for every design."""
-    global FOV_DEG, PMMA_MODE
+    global FOV_DEG, PMMA_MODE, _DISP_ACTIVE
     BOUNDS.copy_(PMMA_BOUNDS)
     FOV_DEG = 5.0
     PMMA_MODE = True
+    _DISP_ACTIVE = True   # FIX-11: PMMA Sellmeier dispersion on
     _rcwa_grid()   # v3: fail loudly NOW if the calibration grid is missing —
     # a silent scalar fallback would be exactly the "stale physics steering"
     # bug class the checkpoint probe system exists to prevent
@@ -206,10 +242,11 @@ def use_full():
     including the full-space FOV metric angle. Needed because BOUNDS is
     mutated in place — without this, a process that once called use_pmma()
     could never get the full space (or its 20-deg FOV metric) back."""
-    global FOV_DEG, PMMA_MODE
+    global FOV_DEG, PMMA_MODE, _DISP_ACTIVE
     BOUNDS.copy_(FULL_BOUNDS)
     FOV_DEG = _FULL_FOV_DEG
     PMMA_MODE = False
+    _DISP_ACTIVE = False  # FIX-11: unknown material -> no dispersion offsets
 
 
 # ----------------------------------------------------------------------------
@@ -384,21 +421,64 @@ def diffraction_angle(x: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
 
 def _diffraction_angles_rgb(n: torch.Tensor, period: torch.Tensor,
                             field_deg: float = 0.0) -> torch.Tensor:
-    """First-order in-guide angles for the RGB design wavelengths, [B,3] rad."""
+    """First-order in-guide angles for the RGB design wavelengths, [B,3] rad.
+    FIX-11: uses the per-primary material index n_rgb(n)."""
     x = grating_x(period, WL, field_deg)          # [B,3]
-    return diffraction_angle(x, n.unsqueeze(1))
+    return diffraction_angle(x, n_rgb(n))
 
 
-def chromatic_spread_deg(theta: torch.Tensor) -> torch.Tensor:
-    """Lateral chromatic spread: red-blue first-order angle difference (deg)."""
+def internal_angle_spread_deg(theta: torch.Tensor) -> torch.Tensor:
+    """DIAGNOSTIC ONLY (was the v2/v3 'chromatic spread' spec metric).
+
+    Red-blue first-order IN-GUIDE angle difference (deg). In a combiner with
+    matched in/out-coupler periods the out-coupler exactly cancels this
+    dispersion for a collimated input (sin(theta_out) = n sin(theta_d)
+    - lambda/period = sin(theta_i)); it is therefore NOT an output chromatic
+    aberration, and using it as one drove the v3 optimizer toward the top of
+    the period window to minimise a quantity a real combiner cancels
+    (2026-07-17 audit, §2.1). Kept for geometry diagnostics; removed from the
+    spec vector."""
     ang = _diffraction_angles_rgb(theta[:, 0], theta[:, 5])
     return torch.rad2deg(ang[:, 2] - ang[:, 0])
 
 
+def chromatic_spread_deg(theta: torch.Tensor) -> torch.Tensor:
+    """FIX-8 (v4): NON-CANCELLING chromatic blur from source spectral width.
+
+    Each display primary has finite bandwidth (LED FWHM ~ LED_FWHM_NM). The
+    in-guide angular dispersion of the grating,
+        d(theta_d)/d(lambda) = 1 / (n * period * cos(theta_d)),
+    spreads that band into a fan of guided angles. Unlike the line-centre
+    dispersion, the WITHIN-BAND fan does not cancel at a matched out-coupler
+    into a single collimated output: the angular fan maps into spatial
+    walk-off across the pupil and residual angular blur (the true chromatic
+    blur source in matched-grating combiners; 2026-07-17 audit §2.1
+    recommends exactly d(theta_d)/d(lambda) * d(lambda)_LED).
+
+    Metric: photopically weighted RGB average of
+        rad2deg( LED_FWHM_NM / (n * period * cos(theta_d_k)) )   [deg].
+    Reduces smoothly toward 0 for large periods/small dispersion; fully
+    differentiable."""
+    n, period = theta[:, 0], theta[:, 5]
+    ang = _diffraction_angles_rgb(n, period)                     # [B,3] rad
+    dth_dlam = 1.0 / (n_rgb(n) * period.unsqueeze(1)
+                      * torch.cos(ang).clamp(min=0.05))          # rad/nm
+    blur = torch.rad2deg(dth_dlam * LED_FWHM_NM)                 # [B,3] deg
+    w = V_PHOTOPIC.to(theta.device).unsqueeze(0)
+    return (w * blur).sum(dim=1)
+
+
 def n_bounces(t: torch.Tensor, theta_d: torch.Tensor) -> torch.Tensor:
-    """TIR bounce count over the coupler separation (FIX-4):
-    N_b = L_PROP / (2 t tan(theta_d)), clamped to [1, N_BOUNCE_MAX]."""
-    return (L_PROP_MM / (2.0 * t * torch.tan(theta_d))).clamp(1.0, N_BOUNCE_MAX)
+    """TIR bounce count over the coupler separation (FIX-4, corrected FIX-7).
+
+    The horizontal advance between SUCCESSIVE surface hits (top->bottom or
+    bottom->top) is t*tan(theta_d), so over a coupler separation L the beam
+    hits a surface N = L / (t tan(theta_d)) times, and the total in-glass
+    path is N * t / cos(theta_d) = L / sin(theta_d). The v2/v3 engine used
+    L/(2 t tan) — one hit per full zig-zag PERIOD instead of two — making
+    both N_b and the Beer-Lambert path exactly 2x short (2026-07-17 audit,
+    §2.9). Clamped to [1, N_BOUNCE_MAX]."""
+    return (L_PROP_MM / (t * torch.tan(theta_d))).clamp(1.0, N_BOUNCE_MAX)
 
 
 def fresnel_T(n: torch.Tensor, field_deg: float, pol: str) -> torch.Tensor:
@@ -495,16 +575,35 @@ def transmission_polarized(theta: torch.Tensor, field_deg: float = 0.0):
 # Feasibility / FOV analysis (FIX-1, FIX-2)
 # ----------------------------------------------------------------------------
 
-def tir_penalty(theta: torch.Tensor, field_deg: float = 0.0,
+def tir_penalty(theta: torch.Tensor, field_deg=None,
                 margin: float = 0.01) -> torch.Tensor:
     """Differentiable penalty > 0 when any RGB wavelength leaves the guiding
-    window 1+margin < x < n-margin at the given field angle. Add to any
-    minimization objective to steer optimizers into physical designs."""
+    window 1+margin < x < n-margin. FIX-10 (v4): evaluated at BOTH the field
+    centre and the field edges (+/- FOV_DEG) by default. The v3 penalty was
+    normal-incidence-only, so the search parked the record design with red
+    0.85 sigmoid-widths PAST evanescence at theta_i = +FOV (2026-07-17
+    audit, §2.2); the sigmoid mask's tail let it score anyway. `margin` is
+    the explicit guard band in x-space.
+
+    field_deg: None -> (0, +FOV_DEG, -FOV_DEG); or a single float."""
     n, period = theta[:, 0], theta[:, 5]
-    x = grating_x(period, WL, field_deg)                       # [B,3]
-    lo = torch.relu((1.0 + margin) - x)
-    hi = torch.relu(x - (n.unsqueeze(1) - margin))
-    return (lo + hi).sum(dim=1)
+    fields = (0.0, float(FOV_DEG), -float(FOV_DEG)) if field_deg is None \
+        else (float(field_deg),)
+    pen = torch.zeros_like(n)
+    nk = n_rgb(n)                                              # FIX-11 [B,3]
+    for fd in fields:
+        x = grating_x(period, WL, fd)                          # [B,3]
+        lo = torch.relu((1.0 + margin) - x)
+        hi = torch.relu(x - (nk - margin))
+        pen = pen + (lo + hi).sum(dim=1)
+    return pen
+
+
+def hard_guided_ok(theta: torch.Tensor, field_deg=None) -> torch.Tensor:
+    """Boolean audit (no sigmoid, no relaxation): True iff every RGB order is
+    STRICTLY inside 1 < x < n at every checked field angle. Use to re-score
+    finalists — a design that fails this is farming the soft mask."""
+    return tir_penalty(theta, field_deg=field_deg, margin=0.0) <= 0.0
 
 
 def fov_window_deg(theta: torch.Tensor):
@@ -516,7 +615,7 @@ def fov_window_deg(theta: torch.Tensor):
     n, period = theta[:, 0], theta[:, 5]
     lam = WL.to(period.device)                                 # [3]
     lo_sin = (1.0 - lam.unsqueeze(0) / period.unsqueeze(1))    # [B,3]
-    hi_sin = (n.unsqueeze(1) - lam.unsqueeze(0) / period.unsqueeze(1))
+    hi_sin = (n_rgb(n) - lam.unsqueeze(0) / period.unsqueeze(1))  # FIX-11
     lo = lo_sin.max(dim=1).values.clamp(-_SAFE_SIN, _SAFE_SIN)
     hi = hi_sin.min(dim=1).values.clamp(-_SAFE_SIN, _SAFE_SIN)
     lo_deg = torch.rad2deg(torch.asin(lo))
@@ -550,12 +649,24 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
     #    displacements x_k = EYE_FL * RESID_DISP * (theta_k - theta_green).
     #    Reduces to 1 as the spread -> 0; equals the true MTF of a 3-delta
     #    PSF (cf. Thibos 1987 lateral-chromatic treatment).
+    #    FIX-9 (v4): each primary is a FINITE-BANDWIDTH line, not a delta.
+    #    The within-band grating dispersion d(theta_d)/d(lambda) maps the
+    #    LED spectrum (sigma_lam = FWHM/2.355) into a Gaussian spread of
+    #    retinal displacements per primary; each phasor is attenuated by the
+    #    Gaussian line's own MTF, exp[-2 (pi f x_sigma_k)^2]. This removes
+    #    the 3-delta model's triangle-inequality floor (0.543) and the
+    #    single-frequency fringe lottery (2026-07-17 audit, §2.4).
     ang = _diffraction_angles_rgb(n, period)                     # [B,3] rad
     dtheta = ang - ang[:, 1:2]
     x_k = EYE_FL_MM * RESID_DISP * dtheta                        # [B,3] mm
+    dth_dlam = 1.0 / (n_rgb(n) * period.unsqueeze(1)
+                      * torch.cos(ang).clamp(min=0.05))          # rad/nm
+    sig_lam = LED_FWHM_NM / 2.355
+    x_sig = EYE_FL_MM * RESID_DISP * dth_dlam * sig_lam          # [B,3] mm
+    env = torch.exp(-2 * (torch.pi * f * x_sig) ** 2)            # [B,3]
     w = V_PHOTOPIC.to(theta.device).unsqueeze(0)                 # [1,3]
-    re = (w * torch.cos(2 * torch.pi * f * x_k)).sum(dim=1)
-    im = (w * torch.sin(2 * torch.pi * f * x_k)).sum(dim=1)
+    re = (w * env * torch.cos(2 * torch.pi * f * x_k)).sum(dim=1)
+    im = (w * env * torch.sin(2 * torch.pi * f * x_k)).sum(dim=1)
     mtf_chrom = torch.sqrt(re ** 2 + im ** 2 + 1e-12)
 
     # 4) Grating MTF: contrast loss from periodic wavefront modulation — scales
