@@ -1,0 +1,76 @@
+"""Second-solver cross-validation of the PMMA calibration RCWA (2026-07-17
+audit, §2.13): grcwa vs meent at ~10 points concentrated near the record
+geometry and the guided-window edges, TM-weighted (TM is where RCWA's Li
+factorization rules bite, and where the paper's polarization claims live).
+"""
+import os
+import sys
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from physics.rigorous_solver import grating_orders_rcwa
+
+N_PMMA = 1.5
+LAM_LIST = (450.0, 532.0, 635.0)
+TOL = 5e-3
+
+# (period, depth, duty) — record, its neighbourhood, window edges, deep corner
+POINTS = [
+    (445.5, 195.1, 0.4482),   # v4 record
+    (448.1, 199.5, 0.4245),   # v3 record
+    (430.0, 200.0, 0.45),     # bottom of the period window
+    (449.0, 200.0, 0.45),     # top of the period window
+    (445.5, 400.0, 0.45),     # deepest grating (worst case for convergence)
+    (445.5, 100.0, 0.45),
+    (445.5, 195.1, 0.20),     # duty extremes
+    (445.5, 195.1, 0.80),
+    (437.0, 300.0, 0.60),
+    (445.5,  20.0, 0.45),     # shallowest
+]
+
+
+def meent_eta1(period, depth, duty, lam, pol_int):
+    """pol_int: 0=TE(s), 1=TM(p). Returns transmitted order +1 efficiency."""
+    import meent
+    NX = 256
+    occ = np.zeros((1, NX))
+    occ[:, : int(round(duty * NX))] = 1.0
+    ucell = 1.0 + (N_PMMA - 1.0) * occ[:, None, :]
+    mee = meent.call_mee(backend=0, pol=pol_int, n_top=1.0, n_bot=N_PMMA,
+                         theta=1e-10, phi=0.0, wavelength=lam,
+                         period=[period], fto=[40, 0],
+                         thickness=[depth], ucell=ucell)
+    res = mee.conv_solve()
+    ti = np.asarray(res.de_ti).flatten().real
+    c = len(ti) // 2
+    return float(ti[c + 1])
+
+
+def main():
+    print(f"{'period':>7} {'depth':>6} {'duty':>5} {'lam':>5} {'pol':>3} "
+          f"{'grcwa':>9} {'meent':>9} {'|diff|':>8}")
+    worst = 0.0
+    n_fail = 0
+    for (P, d, D) in POINTS:
+        for lam in LAM_LIST:
+            for pol, pol_int in (("s", 0), ("p", 1)):
+                g = grating_orders_rcwa(P, d, duty=D, wavelength_nm=lam,
+                                        n_sub=N_PMMA, pol=pol,
+                                        theta_deg=0.0)["T1"]
+                m = meent_eta1(P, d, D, lam, pol_int)
+                diff = abs(g - m)
+                worst = max(worst, diff)
+                flag = "" if diff < TOL else "  << FAIL"
+                if diff >= TOL:
+                    n_fail += 1
+                lab = "TE" if pol == "s" else "TM"
+                print(f"{P:7.1f} {d:6.1f} {D:5.2f} {lam:5.0f} {lab:>3} "
+                      f"{g:9.5f} {m:9.5f} {diff:8.1e}{flag}")
+    print(f"\nworst |diff| = {worst:.2e} over {len(POINTS)*len(LAM_LIST)*2} "
+          f"solves; {n_fail} exceed tol {TOL} -> "
+          f"{'PASS' if n_fail == 0 else 'FAIL'}")
+
+
+if __name__ == "__main__":
+    main()
