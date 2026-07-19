@@ -17,8 +17,8 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path
 from physics.waveguide_physics import (
-    forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
-    tir_penalty,
+    SPEC_SCALE, forward_model, use_pmma, sample_theta, normalize_theta,
+    denormalize_theta, tir_penalty,
 )
 
 N_STARTS, N_STEPS, LR = 80, 200, 0.03
@@ -34,18 +34,19 @@ def run_one(w_mtf, w_T, w_ca, seed=0):
     z0 = normalize_theta(sample_theta(N_STARTS)).clamp(1e-3, 1 - 1e-3)
     w = torch.log(z0 / (1 - z0)).requires_grad_(True)
     opt = torch.optim.Adam([w], lr=LR)
+    def score(theta, y):
+        # same per-metric scales as optimize_pmma.py / neural_adjoint.py
+        return (w_mtf * y[:, 0] + w_T * (y[:, 1] / SPEC_SCALE[1])
+                - w_ca * (y[:, 2] / SPEC_SCALE[2]) - 10.0 * tir_penalty(theta))
+
     for _ in range(N_STEPS):
         theta = denormalize_theta(torch.sigmoid(w))
-        y = forward_model(theta)
-        J = (w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
-             - 10.0 * tir_penalty(theta))
+        J = score(theta, forward_model(theta))
         opt.zero_grad(); (-J.sum()).backward(); opt.step()
     with torch.no_grad():
         theta = denormalize_theta(torch.sigmoid(w))
         y = forward_model(theta)
-        J = (w_mtf * y[:, 0] + w_T * (y[:, 1] / 0.10) - w_ca * (y[:, 2] / 30.0)
-             - 10.0 * tir_penalty(theta))
-        i = J.argmax()
+        i = score(theta, y).argmax()
     return theta[i], y[i]
 
 
@@ -56,13 +57,13 @@ def main():
         theta, y = run_one(w_mtf, w_T, w_ca)
         mtf, T, ca, T_fov = y.tolist()
         print(f"w=({w_mtf},{w_T},{w_ca}) -> MTF {mtf:.4f} | T {100*T:.2f}% | "
-              f"chrom {ca:.2f}deg | period {theta[5]:.0f}nm depth {theta[6]:.0f}nm "
+              f"walkoff {ca:.2f}mm | period {theta[5]:.0f}nm depth {theta[6]:.0f}nm "
               f"duty {theta[7]:.2f} t {theta[4]:.2f}mm")
         rows.append([w_mtf, w_T, w_ca, mtf, T, ca, T_fov] + theta.tolist())
 
     with open(res_path("pareto_results.csv"), "w", newline="") as f:
         wr = csv.writer(f)
-        wr.writerow(["w_mtf", "w_T", "w_ca", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+        wr.writerow(["w_mtf", "w_T", "w_ca", "MTF", "T", "walkoff_mm", "T_fov"] + LABELS)
         wr.writerows(rows)
 
     try:
@@ -76,9 +77,9 @@ def main():
         for r, x, yv in zip(rows, Ts, mtfs):
             ax.annotate(f"({r[0]},{r[1]},{r[2]})", (x, yv), fontsize=7,
                         xytext=(4, 4), textcoords="offset points")
-        fig.colorbar(sc, label="chromatic spread (deg)")
-        ax.set_xlabel("Transmission (%)"); ax.set_ylabel("System MTF @ 40 cyc/mm")
-        ax.set_title("PMMA design trade-off frontier (TIR-constrained physics v2)")
+        fig.colorbar(sc, label="chromatic pupil walk-off (mm)")
+        ax.set_xlabel("Transmission FOM (%)"); ax.set_ylabel("System MTF @ 40 cyc/mm")
+        ax.set_title("PMMA design trade-off frontier (physics v5)")
         fig.tight_layout(); fig.savefig(fig_path("pareto_front.png"), dpi=150)
         print("saved figures/pareto_front.png")
     except ImportError:

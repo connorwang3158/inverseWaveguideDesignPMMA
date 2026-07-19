@@ -2,8 +2,8 @@
 Build a viewable 3D model of the current best PMMA waveguide design.
 
 Reads the winning design (optimal_designs_na.csv from the neural-adjoint
-search, falling back to best_design_ever_v2.csv, falling back to sensible
-defaults), then writes:
+search, falling back to the current engine's hall-of-fame record, then the
+archived v2 record, then sensible defaults), then writes:
 
   waveguide_3d.html    interactive 3D viewer — rotate/zoom with the mouse,
                        drag sliders to change the design, watch the RGB ray
@@ -30,6 +30,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import res_path, root_path
+from physics.waveguide_physics import ENGINE_VERSION
 
 # slab footprint (mm) — typical AR-combiner eyepiece scale
 SLAB_L, SLAB_W = 30.0, 12.0
@@ -44,7 +45,11 @@ def load_best_design():
     """Pull the winning design out of the result CSVs, if any exist."""
     cols = {"t_mm": "t(mm)", "period_nm": "period(nm)",
             "depth_nm": "depth(nm)", "duty": "duty", "n": "n"}
-    for name in ("optimal_designs_na.csv", "best_design_ever_v2.csv"):
+    # current engine's record first (derived, so an engine bump can't leave
+    # this rendering a superseded design), then the archived v2 record
+    for name in ("optimal_designs_na.csv",
+                 f"best_design_ever_{ENGINE_VERSION}.csv",
+                 "best_design_ever_v2.csv"):
         path = res_path(name)
         if not os.path.exists(path):
             continue

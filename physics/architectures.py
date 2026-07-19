@@ -127,11 +127,11 @@ def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.0
 
     # MTF: no grating terms; coating scatter + mirror-edge term (L1 placeholder,
     # promote at G4)  # SYNC-L2
-    from waveguide_physics import PUPIL_MM
-    lam_mm = 532e-6
-    fc = PUPIL_MM / (lam_mm * 17.0)
-    x = torch.tensor(min(40.0 / fc, 0.999))
-    mtf_d = (2 / torch.pi) * (torch.acos(x) - x * torch.sqrt(1 - x ** 2))
+    # v5: use the SAME Watson mean-eye anchor as the diffractive arms —
+    # keeping the old aberration-free 0.847 term here would bias the
+    # cross-architecture comparison ~1.7x toward this arm (FIX-12).
+    from waveguide_physics import PUPIL_MM, watson_eye_mtf
+    mtf_d = watson_eye_mtf(40.0, torch.tensor([PUPIL_MM]))
     mtf = mtf_d * 0.97 * 0.94 * torch.ones(B)
 
     return {"T": T, "chrom_deg_bound": chrom_bound, "MTF": mtf,

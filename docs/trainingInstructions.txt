@@ -1,0 +1,9 @@
+Overnight training instructions live in docs/OVERNIGHT_V5.md (v5 engine,
+2026-07-18). Quick version:
+
+  1. python3 physics/waveguide_physics.py   # v5 banner + self-checks
+  2. python3 physics/validate.py            # must print 11/11 tests passed
+  3. bash overnight.sh                      # >= 12 h; tail -f overnight_log.txt
+
+Morning: open results_report.html, check the v5 sanity anchors in
+docs/OVERNIGHT_V5.md section 3, then resync the paper (section 4).

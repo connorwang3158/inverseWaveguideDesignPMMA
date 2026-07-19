@@ -6,12 +6,14 @@ Reads:  optimal_designs.csv      (from optimize_pmma.py, physics v2 columns)
         design_rcwa_check.csv    (optional, from rigorous_solver.py --designs)
 Writes: waveguide_designs_3d.html (self-contained; double-click to open)
 
-The page embeds a JavaScript port of the corrected physics engine
-(waveguide_physics.py v2): field-angle grating equation, TIR guiding window,
-polarization-resolved Fresnel, geometric bounce count, Tien roughness, scalar
-grating efficiency — so every number shown is recomputed live and matches the
-Python engine. RCWA TE/TM efficiencies (exact vector Maxwell solutions) are
-shown alongside where available.
+The page embeds a JavaScript port of the v2-ERA scalar engine (field-angle
+grating equation, TIR guiding window, polarization-resolved Fresnel, v2
+bounce count, Tien roughness, scalar grating efficiency) for interactive
+ILLUSTRATION ONLY — it does NOT match the current v5 Python engine (RCWA
+coupling, Watson eye MTF, walk-off chromatics, re-interaction term are not
+ported). Quotable numbers come from the CSVs and the Python engine; RCWA
+TE/TM efficiencies (exact vector Maxwell solutions) are shown alongside
+where available.
 
 Usage:  python3 make_3d_viz.py
 """
@@ -40,7 +42,9 @@ def load_designs():
         designs.append({
             "rank": int(r["rank"]), "J": float(r["J"]),
             "MTF": float(r["MTF"]), "T": float(r["T"]),
-            "chrom_deg": float(r["chrom_deg"]), "T_fov": float(r["T_fov"]),
+            # v5 CSVs carry walkoff_mm; older archives carry chrom_deg
+            "chrom_deg": float(r.get("walkoff_mm", r.get("chrom_deg", 0))),
+            "T_fov": float(r["T_fov"]),
             "T_TE": float(r.get("T_TE", 0)), "T_TM": float(r.get("T_TM", 0)),
             "fov_lo": float(r.get("fov_lo_deg", 0)),
             "fov_hi": float(r.get("fov_hi_deg", 0)),
@@ -101,8 +105,9 @@ TEMPLATE = r"""<!DOCTYPE html>
 <div id="scene"></div>
 <div class="hud">
   <h1>PMMA AR Waveguide — Top Designs (3D)</h1>
-  <div class="sub">Physics v2: TIR-constrained, polarization-resolved. Drag = orbit,
-  wheel = zoom. Grating relief exaggerated ×2000 for visibility.</div>
+  <div class="sub">Illustrative v2-era scalar physics (live JS); quotable numbers
+  come from the v5 Python engine + RCWA CSVs. Drag = orbit, wheel = zoom.
+  Grating relief exaggerated ×2000 for visibility.</div>
 
   <label>Design (gradient-search winners)</label>
   <select id="design"></select>
@@ -148,7 +153,7 @@ const DESIGNS = __DESIGNS_JSON__;
 const RCWA = __RCWA_JSON__;
 
 // =================== physics: JS port of waveguide_physics.py v2 ============
-const WL=[450,532,635], VPH=[0.038,0.862,0.217].map((v,_,a)=>v/a.reduce((s,x)=>s+x,0));
+const WL=[450,532,635], VPH=[0.038,0.885,0.217].map((v,_,a)=>v/a.reduce((s,x)=>s+x,0));
 const LPROP=20, ACCEPT=0.35, EYEFL=17, RESID=0.10, F0=40;
 const deg=d=>d*Math.PI/180, rad2deg=r=>r*180/Math.PI;
 

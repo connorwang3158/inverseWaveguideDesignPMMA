@@ -13,7 +13,14 @@ canon (verified against publisher listings) and carries the paper's L2 claims.
 
 1. Watson, A. B. (2013). A formula for the mean human optical modulation transfer
    function as a function of pupil size. *Journal of Vision*, 13(6):18.
-   https://doi.org/10.1167/13.6.18 — diffraction-limited eye MTF.
+   https://doi.org/10.1167/13.6.18 ; full text:
+   https://human-factors.arc.nasa.gov/publications/watson-2013-jov-13-6-18.pdf
+   — mean human (aberrated) eye MTF, M(u,d) = √MTF_DL(u,d,555) ·
+   [1+(u/u₁(d))²]^(−0.62), u₁(d) = 21.95 − 5.512d + 0.3922d². IMPLEMENTED
+   as of engine v5 (`watson_eye_mtf`). NOTE: v2–v4 cited this paper while
+   actually computing the aberration-free diffraction-limited MTF — a
+   misapplication caught by the 2026-07-18 independent review (§2.1); do
+   not cite this entry against any v4-or-earlier number.
 2. Tien, P. K. (1971). Light waves in thin films and integrated optics. *Applied
    Optics*, 10(11), 2395–2413. (†) — per-TIR-bounce roughness loss
    exp[−(4πσn cosθ/λ)²].
@@ -26,15 +33,22 @@ canon (verified against publisher listings) and carries the paper's L2 claims.
    aberration on image quality across the visual field. *JOSA A*, 4(8), 1673.
    https://doi.org/10.1364/JOSAA.4.001673 — chromatic blur treatment.
 6. Nilsen, K., Ding, Y., Lee, S.-L., & Wu, S.-T. (2025). Comparisons of glass and
-   plastic waveguides for augmented reality glasses. *Optics Express*, 33, 20051.
-   https://doi.org/10.1364/OE.562679 — PMMA material parameters.
+   plastic waveguides for augmented reality glasses. *Optics Express*, 33(9),
+   20051–20062. https://doi.org/10.1364/OE.562679 ; author copy:
+   https://api.creol.ucf.edu/Publications/18081.pdf — PMMA material
+   parameters. The sub-nm RMS roughness window used in PMMA_BOUNDS is their
+   acrylic-resin spin-COATED result; untreated plastic is significantly
+   rougher (stated as a scope assumption per the 2026-07-18 review §2.5).
 7. Zhao, Z., et al. (2024). Theoretical efficiency limit of diffractive input
-   couplers in augmented reality waveguides. *Optics Express*, 32, 12340.
-   https://doi.org/10.1364/OE.519027 — coupler efficiency limits, angular acceptance.
+   couplers in augmented reality waveguides. *Optics Express*, 32(7),
+   12340–12357. https://doi.org/10.1364/OE.519027 ; preprint:
+   https://arxiv.org/abs/2401.06900 — coupler efficiency limits, angular
+   acceptance; mechanism behind the v5 re-interaction de-rating (FIX-15).
 8. Goodsell, J., et al. (2024). Framework for optimizing AR waveguide in-coupler
    architectures. *Optics Express*, 32, 9967. https://doi.org/10.1364/OE.515544.
-9. Kress, B. C., & Chatterjee, I. (2020). Waveguide combiners for mixed reality
-   headsets: a nanophotonics design perspective. *Nanophotonics*, 10, 41–74.
+9. Kress, B. C., & Chatterjee, I. (2021). Waveguide combiners for mixed reality
+   headsets: a nanophotonics design perspective. *Nanophotonics*, 10(1), 41–74
+   (online 2020, issue 2021 — cite the issue year consistently).
    https://doi.org/10.1515/nanoph-2020-0410 — system architecture framing.
 
 ## B. Machine-learning method in `surrogate.py`, `train_inverse.py`, `neural_adjoint.py`
@@ -88,10 +102,12 @@ canon (verified against publisher listings) and carries the paper's L2 claims.
 21. Pommet, D. A., Moharam, M. G., & Grann, E. B. (1994). Limits of scalar
     diffraction theory for diffractive phase elements. *JOSA A*, 11(6),
     1827–1834. https://opg.optica.org/josaa/abstract.cfm?uri=josaa-11-6-1827
-    — VERIFIED — proves scalar theory errs >±5% when feature size < 14λ; AR
-    coupler gratings sit at ~1λ, mandating the vectorial treatment. THIS is
-    the citation that justifies rigorous_solver.py's existence and explains
-    the ~50% scalar-vs-RCWA discrepancy found in rcwa_validation.csv.
+    — VERIFIED — scalar theory errs >±5% below ~14λ features in the WORST
+    case; the error is minimized near 50% fill factor (where our gratings
+    sit), so per the 2026-07-18 review §1.3 the paper phrases this as "we
+    measured a 5–15× scalar error at our geometry with RCWA" rather than
+    "scalar theory is invalid below 14λ". THIS is the citation that
+    justifies rigorous_solver.py's existence.
 22. Li, L. (1996). Use of Fourier series in the analysis of discontinuous
     periodic structures. *JOSA A*, 13(9), 1870–1876. (†) — factorization rules.
 23. grcwa — autograd-capable RCWA (W. Jin). Docs: https://grcwa.readthedocs.io ;
@@ -179,6 +195,9 @@ in the current results. Verify DOIs before citing.
     meta-grating (2025). *Nanomaterials*, 15(19), 1493.
     https://doi.org/10.3390/nano15191493 — >60% RGB coupling on thin glass;
     the high-index performance ceiling PMMA trades away for cost/weight.
+36b. Single-layer SiC diffractive waveguide results (2025). *Photonics*,
+    12(10), 952. https://doi.org/10.3390/photonics12100952 — companion
+    high-index anchor to item 36 (added from the 2026-07-18 review §4).
 37. Physics-constrained neural networks for surrogate modeling of lossless
     periodic structures (2026). arXiv:2606.28119 — energy-conservation
     constraints inside the surrogate; candidate regularizer if the v3
@@ -210,3 +229,45 @@ v3 RCWA-labeled surrogate, where each training label becomes expensive.
     surrogate, cutting the required grcwa grid size.
     (AutoTandemML active-learning tandem is already listed as item 14 —
     the same label-efficiency argument applies.)
+
+### H. v3 follow-through & topology/manifold analysis (2026-07-17 scan)
+
+Added while implementing the v3 RCWA-calibrated coupling term. Same caveat as
+the whole file: verify every DOI/arXiv id before the manuscript cites it.
+
+42. Huang, Y., et al. TorchRDIT: eigendecomposition-free rigorous diffraction
+    interface theory in PyTorch. *Optics Express*, 32(8), 13986 (2024 code
+    line, 2025 releases). https://github.com/yi-huang-1/torchrdit — reported
+    up to ~16x faster than eigendecomposition RCWA with exact gradients; the
+    v4 candidate if the coupling term should ever be differentiated THROUGH
+    the rigorous solver instead of through the v3 interpolation table.
+    (Overlaps item 28; kept here because v3 makes the trade concrete.)
+43. Kim, C., & Lee, B. (2023). TORCWA: GPU-accelerated FMM and gradient-based
+    optimization for metasurface design. *Computer Physics Communications*,
+    282, 108552. https://doi.org/10.1016/j.cpc.2022.108552 — GPU RCWA with
+    autograd; alternative v4 backend (already Group D item 24; cross-ref).
+44. Meent: differentiable electromagnetic simulator for machine learning
+    (2024). arXiv:2406.12904 — RCWA with JAX/PyTorch backends and ML-ready
+    APIs; third v4 backend option, the most ML-tooling-complete of the three.
+45. Topology optimization of blazed gratings under conical incidence (2024).
+    arXiv:2403.10174 — adjoint/topological-derivative treatment of grating
+    profiles beyond binary teeth; the systematic way to open the design space
+    (blazed/slanted/freeform) once the binary-grating pipeline is published.
+46. Slanted-grating profile support already exists in rigorous_solver.py
+    (profile_slanted); Levola & Laakkonen (2007), *Opt. Express* 15, 2067
+    (slanted SRG in-couplers for exit-pupil expanders) is the canonical
+    anchor when that thread is opened. (†)
+47. Leykam, D., & Angelakis, D. G. (2021). Photonic band structure design
+    using persistent homology. *APL Photonics*, 6, 030802.
+    https://doi.org/10.1063/5.0041084 — precedent for using persistent
+    homology (topological data analysis) on photonic design spaces; the
+    method candidate for the equivalent-design manifold study (framework
+    S6.5): cluster the inverse net's many-to-one solution families by the
+    topology of their point cloud rather than by eyeballing scatter plots
+    (software: ripser / giotto-tda).
+48. Pommet, D. A., Moharam, M. G., & Grann, E. B. (1994). Limits of scalar
+    diffraction theory for diffractive phase elements. *JOSA A*, 11(6),
+    1827. https://doi.org/10.1364/JOSAA.11.001827 — the quantitative basis
+    for WHY v3 was necessary at 430-449 nm periods; cite next to the v3
+    calibration description. (Was cited informally in code comments since
+    the 2026-07-13 audit; promoted to the bibliography with v3.)

@@ -13,7 +13,7 @@ avoids local optima.
         ▲                                                             │
         └───────────── d J / d theta  (through the network) ◄────────┘
 
-    J = w_mtf * MTF + w_T * (T / 0.10) + 0.3 * (T_fov / 0.10) - w_ca * (chrom / 30)
+    J = w_mtf * MTF + w_T * (T / 0.10) + 0.3 * (T_fov / 0.10) - w_ca * (walkoff / 3)
 
 Honesty step: every finalist design is re-scored with the EXACT physics engine,
 ranked by its TRUE objective, and the surrogate-vs-physics gap is reported and
@@ -26,9 +26,10 @@ Usage (from the project root):
 Outputs:
     results/optimal_designs_na.csv    top designs (surrogate-found, physics-verified)
     figures/neural_adjoint_run.png    search trajectory + surrogate-vs-physics parity
-    results/best_design_ever_v2.csv   all-time hall of fame (physics-scored, shared
-                                 with optimize_pmma.py; v2 = records under the
-                                 corrected TIR-constrained physics)
+    results/best_design_ever_<ver>.csv  all-time hall of fame (physics-scored,
+                                 shared with optimize_pmma.py; keyed on the
+                                 physics ENGINE_VERSION so records from
+                                 different engines never mix)
 """
 
 import argparse
@@ -42,7 +43,7 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path
 from physics.waveguide_physics import (
-    SPEC_SCALE, forward_model, sample_theta, normalize_theta,
+    ENGINE_VERSION, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
     denormalize_theta, tir_penalty,
 )
 from networks.surrogate import load_surrogate
@@ -54,15 +55,19 @@ W_TIR = 10.0   # TIR-feasibility penalty weight (FIX-1) — same as optimize_pmm
 
 LABELS = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
           "period(nm)", "depth(nm)", "duty"]
-SPEC_NAMES = ["MTF", "T", "chrom(deg)", "T@FOV"]
+SPEC_NAMES = ["MTF", "T", "walkoff(mm)", "T@FOV"]
 C_TRAIN, C_VAL, C_SURR, C_REF = "#2a78d6", "#1baf7a", "#eda100", "#e34948"
 C_VIOLET, C_IDENT = "#4a3aa7", "#8a8f98"
 
 
 def objective_from_spec(y: torch.Tensor) -> torch.Tensor:
-    """y [B,4] in PHYSICAL units -> scalar objective per design."""
+    """y [B,4] in PHYSICAL units -> scalar objective per design. The per-
+    metric scales are SPEC_SCALE (walk-off is penalized as a fraction of the
+    eye pupil, v5), so this stays consistent with optimize_pmma.py."""
     mtf, T, ca, T_fov = y.unbind(dim=1)
-    return W_MTF * mtf + W_T * (T / 0.10) + 0.3 * (T_fov / 0.10) - W_CA * (ca / 30.0)
+    s = SPEC_SCALE.to(y.device)
+    return (W_MTF * mtf + W_T * (T / s[1]) + 0.3 * (T_fov / s[3])
+            - W_CA * (ca / s[2]))
 
 
 def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
@@ -117,7 +122,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
         mtf, T, ca, T_fov = y_phys[i].tolist()
         guided = "yes" if tir_ok[i] else "NO (outside TIR guiding window)"
         print(f"\n#{rank}  J={J_phys[i]:.4f} (network believed {J_surr[i]:.4f}) | "
-              f"MTF {mtf:.4f} | T {100*T:.2f}% | chrom {ca:.2f} deg | "
+              f"MTF {mtf:.4f} | T {100*T:.2f}% | walkoff {ca:.2f} mm | "
               f"T@FOV {100*T_fov:.2f}% | TIR-guided: {guided}")
         for lb, v in zip(LABELS, theta[i].tolist()):
             print(f"    {lb:12s} = {v:,.4g}")
@@ -125,7 +130,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     with open(res_path("optimal_designs_na.csv"), "w", newline="") as f:
         wcsv = csv.writer(f)
         wcsv.writerow(["rank", "J_physics", "J_surrogate",
-                       "MTF", "T", "chrom_deg", "T_fov"] + LABELS +
+                       "MTF", "T", "walkoff_mm", "T_fov"] + LABELS +
                       ["tir_guided_rgb"])
         for rank, i in enumerate(top, 1):
             wcsv.writerow([rank, f"{J_phys[i]:.4f}", f"{J_surr[i]:.4f}"] +
@@ -135,9 +140,11 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     print("\nSaved winners -> results/optimal_designs_na.csv")
 
     # hall of fame (shared with optimize_pmma.py): physics-scored record only.
-    # v2 = records under the corrected (TIR-constrained, polarization-resolved)
-    # physics; v1 records were set by leaky designs and are not comparable.
-    hof, prev_J = res_path("best_design_ever_v2.csv"), -1e9
+    # Keyed on ENGINE_VERSION — records under different physics engines are
+    # not comparable (v1: pre-TIR leaky designs; v2: TIR-constrained scalar
+    # coupling; v3: RCWA-calibrated coupling).
+    hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")
+    prev_J = -1e9
     if os.path.exists(hof):
         with open(hof) as f:
             try:
@@ -148,7 +155,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     if J_phys[i_best] > prev_J:
         with open(hof, "w", newline="") as f:
             wcsv = csv.writer(f)
-            wcsv.writerow(["date", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+            wcsv.writerow(["date", "J", "MTF", "T", "walkoff_mm", "T_fov"] + LABELS)
             wcsv.writerow([datetime.date.today().isoformat(),
                            f"{J_phys[i_best]:.8f}"] +
                           [f"{v:.5g}" for v in y_phys[i_best].tolist()] +

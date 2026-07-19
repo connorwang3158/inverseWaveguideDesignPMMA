@@ -28,6 +28,15 @@ Tests:
   V9 Brewster / vector      the polarized Fresnel factor must vanish for TM
                             reflection at Brewster's angle th_B=atan(n) and
                             satisfy T_unpol = (T_TE+T_TM)/2 exactly.
+  V10 Watson eye MTF (v5)   the mean-human-eye MTF term must reproduce
+                            Watson (2013): at 3 mm pupil / ~11.9 cyc/deg it
+                            sits in the published 0.45-0.55 window, strictly
+                            BELOW the 0.847 diffraction limit, and -> 1 at
+                            zero frequency.
+  V11 Walk-off consistency  the chromatic pupil walk-off must drive BOTH
+      (v5)                  spec[2] and the MTF (via the apodized pupil):
+                            doubling the source bandwidth must raise the
+                            walk-off metric and strictly lower MTF_system.
 """
 
 import numpy as np
@@ -139,6 +148,45 @@ def v9_brewster():
           f"|T_TE-T_TM|(30deg) = {dist:.4f} (>0 required)")
 
 
+def v10_watson():
+    import torch
+    from waveguide_physics import watson_eye_mtf, F0_CYC_PER_MM, EYE_FL_MM
+    d3 = torch.tensor([3.0])
+    m40 = watson_eye_mtf(F0_CYC_PER_MM, d3).item()      # ~11.9 cyc/deg
+    # diffraction-limited value at the same frequency/pupil (the term v4
+    # wrongly used): (2/pi)(acos r - r sqrt(1-r^2)), r = u/u0
+    u = F0_CYC_PER_MM * EYE_FL_MM * torch.pi / 180.0
+    u0 = (3.0 * 1e6 / 555.0) * torch.pi / 180.0
+    r = torch.tensor(u / u0)
+    dl = float((2 / torch.pi) * (torch.acos(r) - r * torch.sqrt(1 - r ** 2)))
+    m0 = watson_eye_mtf(1e-6, d3).item()
+    check("V10 Watson eye MTF", 0.45 < m40 < 0.55 and m40 < dl - 0.2
+          and abs(m0 - 1.0) < 1e-3,
+          f"M(40cyc/mm,3mm)={m40:.4f} (published mean-eye ~0.45-0.55; "
+          f"diffraction limit {dl:.3f}); M(0)={m0:.4f}")
+
+
+def v11_walkoff_consistency():
+    import torch
+    import waveguide_physics as wp
+    wp.use_pmma()
+    torch.manual_seed(2)
+    th = wp.sample_theta(32)
+    y1 = wp.forward_model(th)
+    fwhm0 = wp.LED_FWHM_NM
+    try:
+        wp.LED_FWHM_NM = fwhm0 * 2.0          # double the source bandwidth
+        y2 = wp.forward_model(th)
+    finally:
+        wp.LED_FWHM_NM = fwhm0
+    walk_up = bool((y2[:, 2] > y1[:, 2]).all())
+    mtf_down = bool((y2[:, 0] < y1[:, 0]).all())
+    check("V11 Walk-off consistency", walk_up and mtf_down,
+          f"2x bandwidth: walk-off up for 32/32 designs ({walk_up}), "
+          f"MTF down for 32/32 ({mtf_down}) — spec[2] and MTF share one "
+          f"walk-off model")
+
+
 def v7_gates():
     import io, contextlib
     from architectures import run_gates
@@ -155,7 +203,7 @@ def v7_gates():
 if __name__ == "__main__":
     print("Independent validation (no Paper 1 references)\n" + "=" * 56)
     v1_fresnel(); v2_energy(); v3_symmetry(); v5_ceiling(); v6_convergence()
-    v7_gates(); v8_tir(); v9_brewster()
+    v7_gates(); v8_tir(); v9_brewster(); v10_watson(); v11_walkoff_consistency()
     v4_scalar_limit()   # slowest last (nG=81)
     n_ok = sum(ok for _, ok in results)
     print("=" * 56)

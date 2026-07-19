@@ -40,8 +40,8 @@ import torch.nn as nn
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import ckpt_path, fig_path, res_path
 from physics.waveguide_physics import (
-    BOUNDS, SPEC_SCALE, forward_model, sample_theta, normalize_theta,
-    normalize_spec, denormalize_theta, use_pmma, use_full,
+    BOUNDS, ENGINE_VERSION, SPEC_SCALE, forward_model, sample_theta,
+    normalize_theta, normalize_spec, denormalize_theta, use_pmma, use_full,
 )
 
 # Fixed dataset seeds. Training data uses TRAIN_SEED_BASE + seed, which can
@@ -53,7 +53,7 @@ TRAIN_SEED_BASE = 1000
 # fixed-size comparison set for the "best checkpoint ever" decision (see train)
 CMP_SEED, CMP_N = 200, 5000
 
-SPEC_NAMES = ["MTF@40cyc/mm", "Transmission", "ChromSpread(deg)", "T@FOV"]
+SPEC_NAMES = ["MTF@40cyc/mm", "T_FOM", "PupilWalkoff(mm)", "T@FOV"]
 
 # figure palette (validated colorblind-safe set, fixed assignment everywhere)
 C_TRAIN, C_VAL, C_SURR, C_REF = "#2a78d6", "#1baf7a", "#eda100", "#e34948"
@@ -262,7 +262,10 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
         print("checkpoints/forward_surrogate.pt updated (new best for this "
               "design space under the current physics)")
 
-    runs_csv = res_path("surrogate_runs.csv")
+    # run table keyed on the physics engine version — v2-era rows live in
+    # surrogate_runs.csv and must never be pooled with rows trained under a
+    # different physics (they answer a different regression problem)
+    runs_csv = res_path(f"surrogate_runs_{ENGINE_VERSION}.csv")
     new = not os.path.exists(runs_csv)
     with open(runs_csv, "a", newline="") as f:
         w = csv.writer(f)
@@ -273,7 +276,7 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
         w.writerow([seed, int(pmma), n_train, epochs, batch, lr,
                     steps_per_epoch * epochs, f"{best_va:.6f}"] +
                    [f"{v:.5f}" for v in r2.tolist()])
-    print("Appended run summary -> results/surrogate_runs.csv")
+    print(f"Appended run summary -> {runs_csv}")
 
     make_figures(history, y_hat, y_te, r2)
     return model

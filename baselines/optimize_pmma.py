@@ -11,7 +11,7 @@ random starting points (multi-start avoids local optima), maximizing a weighted
 objective:
 
     J = w_mtf * MTF + w_T * (T / 0.10) + 0.3 * (T_fov / 0.10)
-        - w_ca * (chrom_spread / 30 deg) - W_TIR * tir_penalty
+        - w_ca * (walkoff / 3 mm) - W_TIR * tir_penalty
 
 Weights encode the design priorities; sweep them to trace the trade-off frontier
 (the Pareto front) — that trade-off curve is a headline figure for the paper.
@@ -27,8 +27,9 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import res_path
 from physics.waveguide_physics import (
-    forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
-    tir_penalty, transmission_polarized, fov_window_deg,
+    ENGINE_VERSION, SPEC_SCALE, forward_model, use_pmma, sample_theta,
+    normalize_theta, denormalize_theta, tir_penalty, transmission_polarized,
+    fov_window_deg,
 )
 
 N_STARTS = 300     # random starting designs
@@ -47,8 +48,9 @@ W_TIR = 10.0   # weight of the TIR-feasibility penalty (FIX-1); designs whose
 def objective(theta: torch.Tensor) -> torch.Tensor:
     y = forward_model(theta)                       # [B,4]
     mtf, T, ca, T_fov = y.unbind(dim=1)
-    return (W_MTF * mtf + W_T * (T / 0.10) + 0.3 * (T_fov / 0.10)
-            - W_CA * (ca / 30.0) - W_TIR * tir_penalty(theta))
+    s = SPEC_SCALE.to(y.device)                    # walk-off scaled by pupil (v5)
+    return (W_MTF * mtf + W_T * (T / s[1]) + 0.3 * (T_fov / s[3])
+            - W_CA * (ca / s[2]) - W_TIR * tir_penalty(theta))
 
 
 def optimize():
@@ -85,7 +87,7 @@ def optimize():
     for rank, i in enumerate(top, 1):
         mtf, T, ca, T_fov = y[i].tolist()
         print(f"\n#{rank}  J={J[i]:.4f} | MTF {mtf:.4f} | T {100*T:.2f}% | "
-              f"chrom {ca:.2f} deg | T@FOV {100*T_fov:.2f}%")
+              f"walkoff {ca:.2f} mm | T@FOV {100*T_fov:.2f}%")
         print(f"    at {FOV_DEG:.0f} deg field: T_TE {100*pol['TE'][i]:.2f}%  "
               f"T_TM {100*pol['TM'][i]:.2f}%  "
               f"diattenuation {pol['diattenuation'][i]:.3f}")
@@ -98,7 +100,7 @@ def optimize():
     import csv
     with open(res_path("optimal_designs.csv"), "w", newline="") as f:
         wcsv = csv.writer(f)
-        wcsv.writerow(["rank", "J", "MTF", "T", "chrom_deg", "T_fov",
+        wcsv.writerow(["rank", "J", "MTF", "T", "walkoff_mm", "T_fov",
                        "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
                       + LABELS)
         for rank, i in enumerate(top, 1):
@@ -110,9 +112,10 @@ def optimize():
     print("\nSaved winners -> results/optimal_designs.csv")
 
     # hall of fame: keep the best design EVER seen across all runs; only
-    # updates when a new run beats the record
-    hof = res_path("best_design_ever_v2.csv")   # v2: records from the corrected (TIR-
-    # constrained, polarization-resolved) physics; v1 records are not comparable
+    # updates when a new run beats the record. Keyed on ENGINE_VERSION —
+    # records under different physics engines are not comparable (v1: pre-TIR
+    # leaky designs; v2: TIR-constrained scalar; v3: RCWA-calibrated coupling)
+    hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")
     prev_J = -1e9
     if os.path.exists(hof):
         with open(hof) as f:
@@ -124,7 +127,7 @@ def optimize():
     if J[i_best] > prev_J:
         with open(hof, "w", newline="") as f:
             wcsv = csv.writer(f)
-            wcsv.writerow(["date", "J", "MTF", "T", "chrom_deg", "T_fov"] + LABELS)
+            wcsv.writerow(["date", "J", "MTF", "T", "walkoff_mm", "T_fov"] + LABELS)
             import datetime
             wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.8f}"] +
                           [f"{v:.5g}" for v in y[i_best].tolist()] +
