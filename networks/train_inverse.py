@@ -187,7 +187,7 @@ def evaluate(model, y_true, y_true_n, quiet=False):
     mse = nn.functional.mse_loss(normalize_spec(y_hat), y_true_n).item()
     if quiet:
         return mse
-    names = ["MTF@40cyc/mm", "Transmission", "ChromSpread(deg)", "T@FOV"]
+    names = ["MTF@40cyc/mm", "T_FOM", "PupilWalkoff(mm)", "T@FOV"]
     mae = (y_hat - y_true).abs().mean(dim=0)
     rel = ((y_hat - y_true).abs() / (y_true.abs() + 1e-8)).median(dim=0).values
     for nm, a, r in zip(names, mae, rel):
@@ -200,12 +200,14 @@ def evaluate(model, y_true, y_true_n, quiet=False):
 def demo_reverse_engineering(model):
     """Headline demo: request a target spec, read back the recovered design."""
     print("\n=== Reverse-engineering demo ===")
-    # target: sharp (MTF 0.65), efficient-for-class (T 6.5%), low-end chromatic
-    # spread. NOTE: in the PMMA guided window the in-guide RGB spread is
-    # physically ~29-36 deg (period 430-449 nm, n~1.49), so the target must sit
-    # inside that range — the old target of 14 deg was unreachable and made the
-    # demo look like a network failure rather than an infeasible request.
-    y_star = torch.tensor([[0.65, 0.065, 30.0, 0.045]])
+    # target: sharp-for-class (MTF 0.45 under the v5 Watson-eye anchor; the
+    # gradient-probed ceiling of the v5 PMMA space is ~0.466), efficient-
+    # for-class (T_FOM 1.1% vs ~1.35% ceiling), mid-range pupil walk-off
+    # (floor ~1.52 mm in the guided window). NOTE: the target must be
+    # physically reachable — an unreachable request makes the demo look
+    # like a network failure rather than an infeasible spec (lesson from
+    # the v3-era 14-deg target).
+    y_star = torch.tensor([[0.45, 0.011, 1.7, 0.010]])
     theta = denormalize_theta(model(normalize_spec(y_star)))
     y_ach = forward_model(theta)
     labels = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",

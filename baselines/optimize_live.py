@@ -16,7 +16,8 @@ import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from physics.waveguide_physics import (
-    forward_model, use_pmma, sample_theta, normalize_theta, denormalize_theta,
+    SPEC_SCALE, forward_model, use_pmma, sample_theta, normalize_theta,
+    denormalize_theta,
 )
 
 N_STARTS, N_STEPS, LR = 120, 400, 0.03
@@ -24,7 +25,8 @@ W_MTF, W_T, W_CA = 1.0, 1.0, 0.5
 
 
 def objective(y):
-    return W_MTF * y[:, 0] + W_T * (y[:, 1] / 0.10) - W_CA * (y[:, 2] / 30.0)
+    return (W_MTF * y[:, 0] + W_T * (y[:, 1] / SPEC_SCALE[1])
+            - W_CA * (y[:, 2] / SPEC_SCALE[2]))
 
 
 def draw_design(ax, theta, y):
@@ -37,7 +39,7 @@ def draw_design(ax, theta, y):
     ax.set_xlim(0, 10); ax.set_ylim(0, max(t * 1.6, t + 0.5))
     ax.set_title(f"best design now:  Λ={per:.0f}nm  d={dep:.0f}nm  duty={dut:.2f}  "
                  f"t={t:.2f}mm\nMTF {y[0]:.3f} | T {100*y[1]:.2f}% | "
-                 f"chrom {y[2]:.2f}° | T@FOV {100*y[3]:.2f}%")
+                 f"walkoff {y[2]:.2f}mm | T@FOV {100*y[3]:.2f}%")
     ax.set_xlabel("waveguide length (arb.)"); ax.set_ylabel("mm")
 
 
@@ -67,7 +69,7 @@ def main():
                 axL.clear()
                 axL.plot(hist["step"], hist["MTF"], label="MTF")
                 axL.plot(hist["step"], [v / 15 for v in hist["T"]], label="T (%/15)")
-                axL.plot(hist["step"], [v / 15 for v in hist["CA"]], label="chrom (°/15)")
+                axL.plot(hist["step"], hist["CA"], label="walk-off (mm)")
                 axL.set_xlabel("gradient step"); axL.legend(loc="lower right")
                 axL.set_title(f"optimization progress (step {step}/{N_STEPS})")
                 draw_design(axR, theta[i], y[i])

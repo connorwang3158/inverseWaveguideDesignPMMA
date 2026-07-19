@@ -1,9 +1,12 @@
-# Physics Validation & Revision Record (v2, 2026-07-12)
+# Physics Validation & Revision Record (current engine: v5, 2026-07-18)
 
 Rigorous, equation-level justification of the forward model in
-`waveguide_physics.py` (v2), the audit findings that forced the revision, and
-the vector-electromagnetic verification of the resulting designs. Every claim
-below is reproducible: `python3 validate.py` (9 independent tests) and
+`waveguide_physics.py`, the audit findings that forced each revision, and
+the vector-electromagnetic verification of the resulting designs. Sections
+1–4 are the v2-era record (2026-07-12), kept for provenance; **Section 5 is
+the v5 revision** (2026-07-18 independent physics-accuracy review) and
+describes the engine as it now runs. Every claim below is reproducible:
+`python3 validate.py` (11 independent tests) and
 `python3 rigorous_solver.py --designs` (exact Maxwell solutions).
 
 ---
@@ -138,8 +141,11 @@ convergence to 3.8·10⁻⁶, and approach to scalar theory at large Λ/λ (3.5%
 s = 3.8λ, consistent with Pommet et al. 1994).
 
 **Where scalar theory breaks (and why it matters here).** The guided-window
-constraint forces Λ ≈ 438 nm ≈ 0.8λ_green — deep in the regime where Pommet
-et al. (1994) prove scalar theory fails (valid only for features ≳ 14λ).
+constraint forces Λ ≈ 438 nm ≈ 0.8λ_green. Pommet et al. (1994) report >±5%
+scalar error below ~14λ features as the *worst case* (the error is smallest
+near 50% fill factor, where our gratings sit), so the a-priori argument alone
+would be soft — but we do not rely on it: we **measured** the scalar error at
+our geometry with RCWA, and it is 5–15×.
 RCWA at the optimizer's winning design (Λ = 438.2 nm, D = 0.5, n = 1.4992,
 λ = 532 nm):
 
@@ -183,7 +189,109 @@ Full tables: `design_rcwa_check.csv` (5 designs × RGB × TE/TM),
 
 The v2 numbers are less flattering and correct: single-layer full-RGB PMMA
 waveguides are severely index-limited — which is precisely the quantitative
-story (and the honest contribution) the paper can now defend. Validation:
-**9/9 tests pass** (`validate.py`): V1 Fresnel, V2 energy conservation,
+story (and the honest contribution) the paper can now defend.
+
+---
+
+## 5. v5 revision (2026-07-18) — response to the independent accuracy review
+
+An independent physics-accuracy review (2026-07-18) re-derived every
+load-bearing equation from first principles. It confirmed the hard physics
+(TIR window + edge enforcement, grating equation, polarized Fresnel, RCWA
+calibration, Tien roughness, bounce geometry, Sellmeier dispersion) and found
+the remaining problems concentrated in the system-metric layer. v5 fixes all
+of them (FIX-12…FIX-17 in `waveguide_physics.py`):
+
+### 5.1 Eye MTF is now actually Watson (2013)  — FIX-12, review §2.1
+
+The v4 "Watson" term was the aberration-free diffraction-limited pupil MTF
+(0.847 at 40 cyc/mm). v5 implements Watson's real mean-human-eye formula:
+
+```
+M(u,d) = √D(u,d,555nm) · [1 + (u/u₁(d))²]^(−0.62)
+u₁(d)  = 21.95 − 5.512·d + 0.3922·d²      (u in cyc/deg, d in mm, valid 2–6)
+```
+
+At 3 mm / 11.9 cyc/deg this gives **0.4884** (test V10 pins it inside the
+published 0.45–0.55 mean-eye window and strictly below the diffraction
+limit). The whole MTF product drops accordingly — the v4 headline 0.78 was
+inflated by ~0.35 of pure mislabeling; the v5 ceiling of the PMMA space is
+≈ 0.47.
+
+### 5.2 One consistent chromatic model: pupil walk-off — FIX-13, review §2.7
+
+v4's spec[2] (in-guide angular fan, ~3.7°, "non-cancelling") and mtf_chrom
+(the same fan × 0.001, "99.9% cancelled") contradicted each other ~1000×.
+The consistent physics: matched in/out periods cancel the output *angle*
+exactly for every wavelength (sinθ_out = sinθᵢ); the surviving within-band
+effect is **lateral pupil walk-off**
+
+```
+σ_x = L·σ_λ / (n·Λ·sinθ_d·cos²θ_d)        [mm, per primary]
+```
+
+which vignettes the eye pupil rather than blurring the retinal image. v5
+uses ONE walk-off model in both channels: spec[2] := photopic-weighted σ_x
+(mm), and the eye-MTF term is evaluated at the walk-off-reduced effective
+pupil d_eff = D − σ_x (smooth clamp ≥ 1 mm) through Watson's formula.
+mtf_chrom retains only the fabrication period-mismatch residual
+(RESID_DISP ≈ 0.1%), which is the one genuinely surviving *angular* error.
+Test V11 verifies end-to-end consistency: doubling the LED bandwidth raises
+spec[2] and lowers MTF for 32/32 random designs.
+
+### 5.3 Fresnel double-count removed — FIX-14, review §2.3 (pessimistic-side)
+
+grcwa launches the wave from air through the corrugated interface and
+normalizes T(+1) to incident power, so the RCWA η already contains the
+coupler-face reflection (and by reciprocity the exit face). The extra flat
+`fresnel_T²` factor (~0.92) double-counted it and is removed; topology is
+now stated (couplers on the entry/exit faces). This *raises* throughput —
+the review's point that not all v4 errors were optimistic.
+
+### 5.4 Throughput is a relative FOM + re-interaction de-rating — FIX-15, §2.2
+
+Spec[1] is now explicitly a **relative figure of merit** (single eyebox
+position, no exit-pupil expansion), not a device efficiency. A first-order
+re-interaction survival term is added:
+
+```
+T_reint = (1 − η)^m,   m = relu(W_IN/(2·t·tanθ_d) − 1)
+```
+
+— the guided beam re-crosses the in-coupler while the bounce advance is
+shorter than the coupler aperture, and each encounter re-diffracts ~η back
+out (the mechanism behind the thickness-dependent input-efficiency ceiling
+of Zhao et al., *Opt. Express* 32(7), 12340–12357 (2024)). Absolute
+percentages must be framed against the ~10% @20° / ~3% @30° system
+efficiencies reported for conventional diffractive combiners (*Light Sci.
+Appl.* 13, 2024).
+
+### 5.5 Small fixes — FIX-16/17, review §2.4–§2.6, §2.8
+
+* V(532) corrected 0.862 → 0.885 (0.862 is V(530)).
+* n(532) pinned to the Sellmeier value 1.49369 in PMMA mode — a specified
+  material's index is not a design lever; ±0.01 lot scatter is UQ, not a
+  bound to optimize inside.
+* σ ∈ [0.7, 1.1] nm documented as the **spin-coated** PMMA range (Nilsen et
+  al. 2025); untreated PMMA is rougher and out of scope.
+* Normal-incidence RCWA grid + reciprocity reuse for the out-coupler now
+  stated explicitly in the cascade docstring.
+
+### 5.6 Validation status
+
+**11/11 tests pass** (`validate.py`): V1 Fresnel, V2 energy conservation,
 V3 parity, V4 scalar limit, V5 4/π² ceiling, V6 convergence, V7 architecture
-gates, V8 TIR enforcement, V9 Brewster + unpolarized identity.
+gates, V8 TIR enforcement, V9 Brewster + unpolarized identity, **V10 Watson
+eye MTF (external anchor)**, **V11 walk-off spec/MTF consistency**.
+
+Consequences for quoted numbers: all v4-era records, surrogates, and paper
+numbers are stale (`ENGINE_VERSION = "v5"` invalidates them via the
+physics-probe system). Gradient-probed v5 ceilings of the PMMA space:
+MTF ≈ 0.466, T_FOM ≈ 1.35%, walk-off floor ≈ 1.52 mm. Regenerate all
+headline numbers with `bash overnight.sh` before quoting anything.
+
+Remaining L1 heuristics, honestly flagged `# SYNC` (review §2.9): the
+roughness/grating/coupler MTF coefficients, the acceptance width, the S(L_c)
+weighting, the W_IN aperture, and the chord pupil-overlap model — these are
+uncalibrated heuristics and the paper must not quote MTF as a rigorous
+number until they are pinned or bounded.

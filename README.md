@@ -58,8 +58,20 @@ Verification — every stage is scored against the EXACT physics engine
 (physics/waveguide_physics.py), and headline designs are spot-checked in RCWA.
 ```
 
-Spec: [MTF@40cyc/mm, transmission, chromatic spread (°), transmission@20° FOV]
-Design: [n, α, σ_RMS, L_corr, thickness, grating period, depth, duty cycle]
+Spec (v5): [MTF@40cyc/mm, throughput FOM, chromatic pupil walk-off (mm),
+throughput FOM @ FOV field angle]
+Design: [n (pinned to 1.49369 in PMMA mode), α, σ_RMS, L_corr, thickness,
+grating period, depth, duty cycle]
+
+> **v5 engine (2026-07-18).** The independent physics-accuracy review drove
+> engine revision v5: the eye-MTF term is now genuinely Watson (2013), the
+> chromatic spec/MTF channels share one pupil-walk-off model, the Fresnel
+> double-count is removed, throughput carries a re-interaction de-rating and
+> is labeled a *relative* FOM, V(532) is fixed, and n is a pinned material
+> constant. All v4-and-earlier records/surrogates/paper numbers are stale
+> (the physics-probe system refuses them automatically). Regenerate with
+> `bash overnight.sh` — see `docs/OVERNIGHT_V5.md` for the checklist, and
+> `docs/PHYSICS_VALIDATION.md` §5 for the equations.
 
 ## Critical next steps (before publication experiments)
 

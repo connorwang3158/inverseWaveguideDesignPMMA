@@ -1,5 +1,11 @@
 """Stage 0 diagnostics from the 2026-07-17 referee report (§5, Stage 0).
 
+ARCHIVED v4-ERA DIAGNOSTIC. Kept verbatim as the audit record behind
+docs/AUDIT_EXECUTION_REPORT.md. Under the v5 engine (Watson eye MTF,
+walk-off chromatics, Fresnel de-dup, re-interaction term, pinned n) the
+printed comparisons against the v3 record CSV no longer reproduce, and the
+"MTF_diff" recomputed below is the OLD diffraction-limited term, not the
+v5 Watson term. Do not use these numbers for the paper.
 Six checks, no retraining. Each answers a gate question:
   D1  Five MTF factors separately at the record design  -> is MTF_sys just MTF_chrom?
   D2  theta_d(R) - theta_d(B) at the record             -> equals the reported 28.8 chrom?

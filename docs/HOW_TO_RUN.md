@@ -55,6 +55,11 @@ project root.
 
 ## 3. Training overnight (the real runs — guaranteed 12+ hours)
 
+> **v5 note (2026-07-18):** before an overnight run, read
+> `docs/OVERNIGHT_V5.md` — it has the pre-flight checks, the expected v5
+> number ranges (MTF ≈ 0.44–0.47, throughput FOM ≈ 1.0–1.4%, walk-off
+> ≈ 1.5–2.5 mm), and the morning paper-resync checklist.
+
 One command starts the whole pipeline and **keeps working until at least 12
 hours have passed**:
 

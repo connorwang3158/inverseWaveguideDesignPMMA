@@ -210,7 +210,7 @@ with open(os.path.join(ROOT,
           f"results/memorization_audit_{ENGINE_VERSION}.csv"), "w",
           newline="") as f:
     w = csv.writer(f)
-    w.writerow(["dataset", "MSE", "R2_MTF", "R2_T", "R2_chrom", "R2_Tfov"])
+    w.writerow(["dataset", "MSE", "R2_MTF", "R2_T", "R2_walkoff", "R2_Tfov"])
     for n in names:
         w.writerow([n.replace("\n", " "), f"{mse[n]:.6e}"] +
                    [f"{v:.5f}" for v in r2_all[n].tolist()])

@@ -1,5 +1,28 @@
 # Abstract (draft v1 — 2026-07-17, under the v3 RCWA-calibrated engine)
 
+> **⚠️ v5 ENGINE NOTICE (2026-07-18): every number in this file is stale.**
+> The 2026-07-18 independent physics-accuracy review forced engine revision
+> v5 (Watson mean-eye MTF, walk-off chromatics, Fresnel de-dup,
+> re-interaction de-rating, pinned PMMA index — see
+> `docs/PHYSICS_VALIDATION.md` §5). Consequences for this draft:
+>
+> 1. **MTF 0.78 is dead.** It contained the mislabeled diffraction-limited
+>    eye term (0.847 where Watson's real value is 0.488). The v5 gradient-
+>    probed ceiling of the PMMA space is **MTF ≈ 0.466** — quote the
+>    post-overnight v5 record, not 0.78.
+> 2. **"1.3% double-coupler transmission" must be reframed** as a *relative*
+>    figure of merit (single eyebox position, no exit-pupil expansion), not
+>    a device efficiency; the v5 number moves both ways (Fresnel de-dup
+>    raises it, re-interaction lowers it; probed ceiling ≈ 1.35%) and must
+>    still be framed against the ~10% @20° / ~3% @30° anchors.
+> 3. **"lateral chromatic spread 28.8°" is retired.** The v5 spec metric is
+>    chromatic pupil walk-off in mm (floor ≈ 1.52 mm in the guided window);
+>    the in-guide angular spread was cancelled by a matched out-coupler and
+>    was never an output aberration.
+> 4. All surrogate/tandem/adjoint statistics must be regenerated under v5
+>    (`bash overnight.sh`; see `docs/OVERNIGHT_V5.md`). The methodology
+>    claims (RCWA calibration, TIR enforcement, tandem architecture,
+>    memorization audit) are unaffected.
 **Status / where this can go right now**
 - **SPIE Photonics West AR|VR|MR 2027** (San Francisco, Jan 30–Feb 4 2027):
   abstract deadline **22 July 2026**. The current results are sufficient for
