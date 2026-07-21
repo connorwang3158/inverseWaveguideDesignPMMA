@@ -97,18 +97,31 @@ def optimize():
 
     # permanent record of the winners (now with polarization + FOV window)
     import csv
-    with open(res_path("optimal_designs.csv"), "w", newline="") as f:
-        wcsv = csv.writer(f)
-        wcsv.writerow(["rank", "J", "MTF", "T", "walkoff_mm", "T_fov",
-                       "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
-                      + LABELS)
-        for rank, i in enumerate(top, 1):
-            wcsv.writerow([rank, f"{J[i]:.4f}"] +
-                          [f"{v:.5g}" for v in y[i].tolist()] +
-                          [f"{pol['TE'][i]:.5g}", f"{pol['TM'][i]:.5g}",
-                           f"{fov_lo[i]:.3f}", f"{fov_hi[i]:.3f}"] +
-                          [f"{v:.5g}" for v in theta[i].tolist()])
-    print("\nSaved winners -> results/optimal_designs.csv")
+    # `engine` is the LAST column (safe for both DictReader and positional
+    # front-indexed readers) so every row self-identifies which physics engine
+    # produced it — no file can silently be mistaken for a different engine's
+    # results (the failure mode behind the stale unversioned pareto_results.csv).
+    header = (["rank", "J", "MTF", "T", "walkoff_mm", "T_fov",
+               "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
+              + LABELS + ["engine"])
+    out_rows = []
+    for rank, i in enumerate(top, 1):
+        out_rows.append([rank, f"{J[i]:.4f}"] +
+                        [f"{v:.5g}" for v in y[i].tolist()] +
+                        [f"{pol['TE'][i]:.5g}", f"{pol['TM'][i]:.5g}",
+                         f"{fov_lo[i]:.3f}", f"{fov_hi[i]:.3f}"] +
+                        [f"{v:.5g}" for v in theta[i].tolist()] +
+                        [ENGINE_VERSION])
+    # canonical "latest" file (downstream scripts read this name) ...
+    for path in (res_path("optimal_designs.csv"),
+                 res_path(f"optimal_designs_{ENGINE_VERSION}.csv")):
+        with open(path, "w", newline="") as f:
+            wcsv = csv.writer(f)
+            wcsv.writerow(header)
+            wcsv.writerows(out_rows)
+    # ... plus a version-stamped copy so provenance survives the next overwrite.
+    print(f"\nSaved winners -> results/optimal_designs.csv "
+          f"(+ optimal_designs_{ENGINE_VERSION}.csv)")
 
     # hall of fame: keep the best design EVER seen across all runs; only
     # updates when a new run beats the record. Keyed on ENGINE_VERSION —
@@ -126,11 +139,13 @@ def optimize():
     if J[i_best] > prev_J:
         with open(hof, "w", newline="") as f:
             wcsv = csv.writer(f)
-            wcsv.writerow(["date", "J", "MTF", "T", "walkoff_mm", "T_fov"] + LABELS)
+            wcsv.writerow(["date", "J", "MTF", "T", "walkoff_mm", "T_fov"]
+                          + LABELS + ["engine"])
             import datetime
             wcsv.writerow([datetime.date.today().isoformat(), f"{J[i_best]:.8f}"] +
                           [f"{v:.5g}" for v in y[i_best].tolist()] +
-                          [f"{v:.5g}" for v in theta[i_best].tolist()])
+                          [f"{v:.5g}" for v in theta[i_best].tolist()] +
+                          [ENGINE_VERSION])
         print(f"NEW RECORD: J={J[i_best]:.4f} beats {prev_J:.4f} -> {hof}")
     else:
         print(f"no new record (best this run {J[i_best]:.4f} vs all-time {prev_J:.4f})")
