@@ -1,8 +1,0 @@
-dataset,MSE,R2_MTF,R2_T,R2_chrom,R2_Tfov
-its own training data,9.554791e-08,0.99997,1.00000,1.00000,1.00000
-validation set (never trained on),9.943880e-08,0.99997,1.00000,1.00000,1.00000
-test set (never trained on),1.113809e-07,0.99997,1.00000,1.00000,1.00000
-brand-new set (generated today),1.054404e-07,0.99997,1.00000,1.00000,1.00000
-
-never_seen_over_train_error_ratio,1.10
-corr_error_vs_distance_to_training,+0.090

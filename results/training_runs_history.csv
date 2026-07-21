@@ -1,2 +1,0 @@
-seed,samples,epochs,batch,lr,iterations,best_val_specMSE
-0,6000,8,512,0.001,96,0.002267
