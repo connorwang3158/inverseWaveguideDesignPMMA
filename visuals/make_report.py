@@ -1,97 +1,97 @@
 """
-Compile all result CSVs and figures into one readable HTML report.
+Trade-off frontier exploration for PMMA waveguide designs.
 
-Usage:  python3 visuals/make_report.py   ->  results_report.html at the
-project root (double-click to open). Tables come from results/, images
-from figures/.
+Sweeps the objective weights in optimize-style gradient ascent to trace how much
+MTF you must give up to gain transmission (and vice versa), and how chromatic
+spread rides along. Outputs pareto_results.csv and pareto_front.png.
+
+Usage: python3 sweep_pareto.py
 """
 
 import csv
 import os
 import sys
-from datetime import datetime
+
+import torch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from paths import fig_path, res_path, root_path
-from physics.waveguide_physics import ENGINE_VERSION as EV
+from paths import fig_path, res_path
+from physics.waveguide_physics import (
+    ENGINE_VERSION, SPEC_SCALE, forward_model, use_pmma, sample_theta,
+    normalize_theta, denormalize_theta, tir_penalty,
+)
 
-# current-engine tables derive their names from ENGINE_VERSION so an engine
-# bump can never leave the report rendering a stale era as "current"; the
-# v2-era archives are frozen literals on purpose
-FILES = [
-    (f"Forward surrogate runs — {EV} RCWA-calibrated engine",
-     f"surrogate_runs_{EV}.csv"),
-    (f"Inverse-network training runs — {EV} engine", f"training_runs_{EV}.csv"),
-    ("Forward surrogate runs (v2 engine, archived table)", "surrogate_runs.csv"),
-    ("Inverse-network training runs (v2 engine, archived table)", "training_runs.csv"),
-    ("Neural-adjoint winners (network-found, physics-verified)", "optimal_designs_na.csv"),
-    (f"All-time best design — {EV} RCWA-calibrated physics",
-     f"best_design_ever_{EV}.csv"),
-    ("All-time best design (v2 physics, archived record)", "best_design_ever_v2.csv"),
-    ("Optimal designs (gradient-baseline winners)", "optimal_designs.csv"),
-    ("Trade-off sweep (priority menu)", "pareto_results.csv"),
-    (f"RCWA calibration grid: off-grid interpolant audit ({EV} evidence)",
-     "rcwa_calibration_check.csv"),
-    ("Scalar vs rigorous RCWA validation", "rcwa_validation.csv"),
-    (f"RCWA check of neural-adjoint winners — {EV} engine",
-     f"design_rcwa_check_na_{EV}.csv"),
-    ("RCWA check of neural-adjoint winners (v2-era scalar-validity audit)",
-     "design_rcwa_check_na.csv"),
-    (f"Memorization audit — {EV} engine (numbers)",
-     f"memorization_audit_{EV}.csv"),
-    ("Memorization audit (v2 engine, archived numbers)", "memorization_audit.csv"),
-]
-IMAGES = [("Surrogate learning curve", "surrogate_loss_curve.png"),
-          ("Surrogate parity (prediction vs exact physics)", "surrogate_parity.png"),
-          ("Memorization audit (generalization evidence)", "memorization_audit.png"),
-          ("Inverse-network training curve", "loss_curve.png"),
-          ("Neural-adjoint search", "neural_adjoint_run.png"),
-          ("Trade-off frontier", "pareto_front.png")]
+N_STARTS, N_STEPS, LR = 80, 200, 0.03
+LABELS = ["n", "alpha", "sigma", "Lc", "t", "period", "depth", "duty"]
+
+# (w_mtf, w_T, w_ca) settings spanning "sharpness-first" -> "brightness-first"
+SWEEP = [(3.0, 0.3, 0.5), (2.0, 0.6, 0.5), (1.0, 1.0, 0.5),
+         (0.6, 2.0, 0.5), (0.3, 3.0, 0.5), (1.0, 1.0, 2.0)]
 
 
-def table_html(path):
-    with open(path) as f:
-        rows = list(csv.reader(f))
-    if not rows:   # empty file (e.g. a run interrupted mid-write) — don't crash
-        return "<p class='miss'>file is empty.</p>"
-    head = "".join(f"<th>{c}</th>" for c in rows[0])
-    body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
-                   for r in rows[1:])
-    return f"<table><tr>{head}</tr>{body}</table>"
+def run_one(w_mtf, w_T, w_ca, seed=0):
+    torch.manual_seed(seed)
+    z0 = normalize_theta(sample_theta(N_STARTS)).clamp(1e-3, 1 - 1e-3)
+    w = torch.log(z0 / (1 - z0)).requires_grad_(True)
+    opt = torch.optim.Adam([w], lr=LR)
+    def score(theta, y):
+        # same per-metric scales as optimize_pmma.py / neural_adjoint.py
+        return (w_mtf * y[:, 0] + w_T * (y[:, 1] / SPEC_SCALE[1])
+                - w_ca * (y[:, 2] / SPEC_SCALE[2]) - 10.0 * tir_penalty(theta))
+
+    for _ in range(N_STEPS):
+        theta = denormalize_theta(torch.sigmoid(w))
+        J = score(theta, forward_model(theta))
+        opt.zero_grad(); (-J.sum()).backward(); opt.step()
+    with torch.no_grad():
+        theta = denormalize_theta(torch.sigmoid(w))
+        y = forward_model(theta)
+        i = score(theta, y).argmax()
+    return theta[i], y[i]
 
 
 def main():
-    parts = [f"""<html><head><meta charset='utf-8'><title>Waveguide Results</title>
-<style>body{{font:14px -apple-system,sans-serif;max-width:900px;margin:30px auto;color:#1a2233}}
-h1{{font-size:22px}} h2{{font-size:16px;margin-top:28px;border-bottom:1px solid #ccd;padding-bottom:4px}}
-table{{border-collapse:collapse;margin-top:8px}} td,th{{border:1px solid #ccd;padding:4px 9px;font-size:12px}}
-th{{background:#eef2fa}} img{{max-width:100%;border:1px solid #ccd;border-radius:6px;margin-top:8px}}
-.miss{{color:#a33;font-size:12px}}</style></head><body>
-<h1>AR Waveguide Inverse Design — Results Report</h1>
-<p>Generated {datetime.now():%Y-%m-%d %H:%M}. Re-run <code>python3 visuals/make_report.py</code>
-after any experiment to refresh.</p>"""]
-    for title, name in FILES:
-        parts.append(f"<h2>{title}</h2>")
-        parts.append(table_html(res_path(name)) if os.path.exists(res_path(name))
-                     else f"<p class='miss'>results/{name} not found — run the matching script first.</p>")
-    for title, name in IMAGES:
-        parts.append(f"<h2>{title}</h2>")
-        # the report sits at the project root, so images resolve via figures/
-        parts.append(f"<img src='figures/{name}'>" if os.path.exists(fig_path(name))
-                     else f"<p class='miss'>figures/{name} not found.</p>")
-    parts.append("<h2>3D model</h2>")
-    if os.path.exists(root_path("waveguide_3d.html")):
-        parts.append("<p>Open <a href='waveguide_3d.html'>waveguide_3d.html</a> "
-                     "to rotate the winning waveguide in 3D (drag to rotate, "
-                     "scroll to zoom). A printable mesh is in "
-                     "<code>results/waveguide_model.stl</code>.</p>")
-    else:
-        parts.append("<p class='miss'>waveguide_3d.html not found — run "
-                     "python3 visuals/make_3d_model.py.</p>")
-    parts.append("</body></html>")
-    with open(root_path("results_report.html"), "w") as f:
-        f.write("\n".join(parts))
-    print("written -> results_report.html at the project root (double-click it)")
+    use_pmma()
+    rows = []
+    for w_mtf, w_T, w_ca in SWEEP:
+        theta, y = run_one(w_mtf, w_T, w_ca)
+        mtf, T, ca, T_fov = y.tolist()
+        print(f"w=({w_mtf},{w_T},{w_ca}) -> MTF {mtf:.4f} | T {100*T:.2f}% | "
+              f"walkoff {ca:.2f}mm | period {theta[5]:.0f}nm depth {theta[6]:.0f}nm "
+              f"duty {theta[7]:.2f} t {theta[4]:.2f}mm")
+        rows.append([w_mtf, w_T, w_ca, mtf, T, ca, T_fov] + theta.tolist()
+                    + [ENGINE_VERSION])
+
+    # `engine` as the last column + a version-stamped copy: a Pareto front from
+    # one physics engine can never again masquerade as another's (this file was
+    # the stale, unversioned v2-era artifact flagged in the data audit).
+    header = (["w_mtf", "w_T", "w_ca", "MTF", "T", "walkoff_mm", "T_fov"]
+              + LABELS + ["engine"])
+    for path in (res_path("pareto_results.csv"),
+                 res_path(f"pareto_results_{ENGINE_VERSION}.csv")):
+        with open(path, "w", newline="") as f:
+            wr = csv.writer(f)
+            wr.writerow(header)
+            wr.writerows(rows)
+
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        mtfs = [r[3] for r in rows]; Ts = [100 * r[4] for r in rows]
+        cas = [r[5] for r in rows]
+        fig, ax = plt.subplots(figsize=(6, 4.5))
+        sc = ax.scatter(Ts, mtfs, c=cas, cmap="viridis", s=90, edgecolors="k")
+        for r, x, yv in zip(rows, Ts, mtfs):
+            ax.annotate(f"({r[0]},{r[1]},{r[2]})", (x, yv), fontsize=7,
+                        xytext=(4, 4), textcoords="offset points")
+        fig.colorbar(sc, label="chromatic pupil walk-off (mm)")
+        ax.set_xlabel("Transmission FOM (%)"); ax.set_ylabel("System MTF @ 40 cyc/mm")
+        ax.set_title("PMMA design trade-off frontier (physics v5)")
+        fig.tight_layout(); fig.savefig(fig_path("pareto_front.png"), dpi=150)
+        print("saved figures/pareto_front.png")
+    except ImportError:
+        print("matplotlib not installed; CSV only")
 
 
 if __name__ == "__main__":
