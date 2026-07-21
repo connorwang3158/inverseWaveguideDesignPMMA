@@ -1,0 +1,10 @@
+dataset,MSE,R2_MTF,R2_T,R2_walkoff,R2_Tfov
+its own training data,1.184379e-07,0.99988,0.99979,1.00000,0.99979
+model-selection set (not trained on),1.181247e-07,0.99988,0.99979,1.00000,0.99980
+test set (never trained on),1.242168e-07,0.99987,0.99977,1.00000,0.99978
+brand-new set (generated today),1.206009e-07,0.99987,0.99978,1.00000,0.99979
+
+deployed_checkpoint_seed,0
+training_data_seed_used_for_audit,1000
+never_seen_over_train_error_ratio,1.02
+corr_error_vs_distance_to_training,+0.012
