@@ -6,7 +6,7 @@ Different job from train_inverse.py:
   optimize_pmma.py : "search the whole PMMA design space -> give me the BEST designs"
 
 Because the physics engine is differentiable, we don't need a neural network for
-this — we run gradient ASCENT on the design parameters themselves, from many
+this, we run gradient ASCENT on the design parameters themselves, from many
 random starting points (multi-start avoids local optima), maximizing a weighted
 objective:
 
@@ -14,7 +14,7 @@ objective:
         - w_ca * (walkoff / 3 mm) - W_TIR * tir_penalty
 
 Weights encode the design priorities; sweep them to trace the trade-off frontier
-(the Pareto front) — that trade-off curve is a headline figure for the paper.
+(the Pareto front), that trade-off curve is a headline figure for the paper.
 
 Usage:  python3 optimize_pmma.py
 """
@@ -34,20 +34,20 @@ from physics.waveguide_physics import (
 N_STARTS = 300     # random starting designs
 N_STEPS = 400      # gradient steps
 LR = 0.03
-W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # objective weights — sweep these for Pareto front
+W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # objective weights, sweep these for Pareto front
 
 LABELS = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
           "period(nm)", "depth(nm)", "duty"]
 
 
-W_TIR = 10.0   # weight of the TIR-feasibility penalty (FIX-1); designs whose
+W_TIR = 10.0   # weight of the TIR-feasibility penalty; designs whose
                # RGB orders leave the guiding window are steered back in
 
 
 def objective(theta: torch.Tensor) -> torch.Tensor:
     y = forward_model(theta)                       # [B,4]
     mtf, T, ca, T_fov = y.unbind(dim=1)
-    s = SPEC_SCALE.to(y.device)                    # walk-off scaled by pupil (v5)
+    s = SPEC_SCALE.to(y.device)                    # walk-off scaled by pupil
     return (W_MTF * mtf + W_T * (T / s[1]) + 0.3 * (T_fov / s[3])
             - W_CA * (ca / s[2]) - W_TIR * tir_penalty(theta))
 
@@ -77,7 +77,7 @@ def optimize():
 
     # polarization split evaluated at the FOV field angle: at normal incidence
     # TE and TM are identical by symmetry, so the previous 0-deg report always
-    # printed diattenuation 0.000 — true but uninformative
+    # printed diattenuation 0.000, true but uninformative
     from physics.waveguide_physics import FOV_DEG
     pol = transmission_polarized(theta, field_deg=FOV_DEG)
     fov_lo, fov_hi, fov_w = fov_window_deg(theta)
@@ -99,7 +99,7 @@ def optimize():
     import csv
     # `engine` is the LAST column (safe for both DictReader and positional
     # front-indexed readers) so every row self-identifies which physics engine
-    # produced it — no file can silently be mistaken for a different engine's
+    # produced it, no file can silently be mistaken for a different engine's
     # results (the failure mode behind the stale unversioned pareto_results.csv).
     header = (["rank", "J", "MTF", "T", "walkoff_mm", "T_fov",
                "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
@@ -124,7 +124,7 @@ def optimize():
           f"(+ optimal_designs_{ENGINE_VERSION}.csv)")
 
     # hall of fame: keep the best design EVER seen across all runs; only
-    # updates when a new run beats the record. Keyed on ENGINE_VERSION —
+    # updates when a new run beats the record. Keyed on ENGINE_VERSION, 
     # records under different physics engines are not comparable (v1: pre-TIR
     # leaky designs; v2: TIR-constrained scalar; v3: RCWA-calibrated coupling)
     hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")

@@ -1,9 +1,9 @@
 """
 Rigorous electromagnetic solver layer (L2) for AR waveguide gratings.
 
-Wraps grcwa — an established open-source Rigorous Coupled-Wave Analysis (RCWA)
+Wraps grcwa, an established open-source Rigorous Coupled-Wave Analysis (RCWA)
 implementation (W. Jin et al., "Inverse design of lightweight broadband
-reflector...", and grcwa docs: grcwa.readthedocs.io) — to solve Maxwell's
+reflector...", and grcwa docs: grcwa.readthedocs.io), to solve Maxwell's
 equations VECTORIALLY for the in-coupler grating. This replaces the scalar
 approximation in waveguide_physics.py wherever paper claims are made (claims
 ladder level L2, see architecture_framework.md).
@@ -15,16 +15,16 @@ What this adds over the scalar model:
       binary, blazed (sawtooth), sinusoidal, slanted, trapezoidal
   * efficiency per diffraction order, any incidence angle, conical mounts
 
-Solver landscape (what exists beyond this file — documented so nothing is
+Solver landscape (what exists beyond this file, documented so nothing is
 hidden): RCWA/FMM is the standard for PERIODIC structures (this file; also
 torcwa [Kim & Lee, Comp. Phys. Comm. 282:108552, 2023] for GPU, meent, S4).
 For NON-periodic / arbitrary 3D shapes use FDTD (Meep [Oskooi et al., Comp.
 Phys. Comm. 181:687, 2010], Lumerical) or FEM (COMSOL, JCMsuite). For the
 mm-scale light transport (TIR bounces, pupil expansion) use ray tracing
-(Zemax OpticStudio) — no single tool spans both scales; the ladder in
+(Zemax OpticStudio), no single tool spans both scales; the ladder in
 architecture_framework.md is the standard industrial workflow.
 
-Speed: seconds per wavelength/polarization at nG=81 — fine for verification,
+Speed: seconds per wavelength/polarization at nG=81, fine for verification,
 NOT for training loops (train on the analytic engine, verify here).
 
 Usage:
@@ -49,7 +49,7 @@ NG = 61                 # Fourier orders retained; convergence_check() shows
                         # T(+1) stable to 5 decimals already at nG=41
 
 # Representative period for the scalar-vs-RCWA validation sweep. This MUST sit
-# inside the TIR-guided PMMA window (~430-449 nm, waveguide_physics FIX-1); the
+# inside the TIR-guided PMMA window (~430-449 nm, waveguide_physics); the
 # old default of 500 nm is OUTSIDE that window and does not guide RGB, so a
 # "validation" there does not describe the regime any headline design uses.
 # (The large-period approach to scalar theory is separately covered by
@@ -110,7 +110,7 @@ def grating_orders_rcwa(period_nm, depth_nm, duty=0.5, wavelength_nm=532.0,
     substrate (the waveguide slab). Transmitted order m=+1 propagating inside
     PMMA is the coupled beam.
 
-    Returns dict: {'T_orders': {m: eff}, 'R_total', 'T_total', 'T1'} —
+    Returns dict: {'T_orders': {m: eff}, 'R_total', 'T_total', 'T1'}, 
     efficiencies normalized to incident power (grcwa RT_Solve(normalize=1)).
     """
     if n_sublayers is None:
@@ -181,7 +181,7 @@ def verify_designs(csv_in=None, csv_out=None,
     csv_in = csv_in or res_path("optimal_designs.csv")
     csv_out = csv_out or res_path("design_rcwa_check.csv")
     if not os.path.exists(csv_in):
-        print(f"{csv_in} not found — run baselines/optimize_pmma.py first"); return
+        print(f"{csv_in} not found, run baselines/optimize_pmma.py first"); return
     with open(csv_in) as f:
         rows = list(csv.DictReader(f))
     out = []

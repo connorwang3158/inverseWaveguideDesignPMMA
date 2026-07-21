@@ -1,4 +1,4 @@
-# Diffractive AR Waveguide — Inverse-Design Engine
+# Diffractive AR Waveguide Inverse-Design Engine
 
 Differentiable physics engine and ML inverse-design pipeline for PMMA
 surface-relief-grating AR waveguides. This repository contains only the

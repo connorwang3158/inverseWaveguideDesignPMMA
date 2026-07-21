@@ -15,7 +15,7 @@ N_PMMA = 1.5
 LAM_LIST = (450.0, 532.0, 635.0)
 TOL = 5e-3
 
-# (period, depth, duty) — record, its neighbourhood, window edges, deep corner
+# (period, depth, duty), record, its neighbourhood, window edges, deep corner
 POINTS = [
     (445.5, 195.1, 0.4482),   # v4 record
     (448.1, 199.5, 0.4245),   # v3 record

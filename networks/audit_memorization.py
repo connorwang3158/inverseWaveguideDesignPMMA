@@ -9,7 +9,7 @@ Four tests, one figure:
      A memorizing network gets worse the farther you move from its
      training points; a network that learned the function stays flat.
   D. Test-set R^2 (MTF) across every independent retraining in the current
-     engine's surrogate run table — memorization is seed-brittle, learning
+     engine's surrogate run table, memorization is seed-brittle, learning
      is stable.
 """
 import csv
@@ -26,7 +26,7 @@ from networks.surrogate import (load_surrogate, make_dataset, r2_per_metric,
                                 TRAIN_SEED_BASE, VAL_SEED, TEST_SEED)
 from physics.waveguide_physics import ENGINE_VERSION
 
-# Test D pools retrainings from the CURRENT engine's run table only —
+# Test D pools retrainings from the CURRENT engine's run table only, 
 # surrogates trained under different physics answer different regression
 # problems (v2-era rows stay in results/surrogate_runs.csv)
 RUNS_CSV = f"results/surrogate_runs_{ENGINE_VERSION}.csv"
@@ -44,7 +44,7 @@ seed, n_train = ck["seed"], ck["n_train"]
 # checkpoints store it ("train_seed"). Legacy checkpoints (no "cmp_val" key)
 # predate the seed-collision fix and used the old mapping 100+seed; assuming
 # the current mapping for them would rebuild a dataset the network never saw
-# — the "training data" bar in test A would silently be a fourth unseen set,
+#, the "training data" bar in test A would silently be a fourth unseen set,
 # and test C's distance-to-training-data would measure the wrong point cloud.
 if "train_seed" in ck:
     train_seed = ck["train_seed"]
@@ -55,7 +55,7 @@ else:
     if train_seed in (VAL_SEED, TEST_SEED):
         raise SystemExit(
             "deployed legacy checkpoint was trained with the seed-collision "
-            "bug (its training data IS the val/test set) — retrain before "
+            "bug (its training data IS the val/test set), retrain before "
             "auditing")
 print(f"deployed checkpoint: seed {seed}, n_train {n_train}, "
       f"training-data seed {train_seed}"
@@ -114,16 +114,16 @@ for b in range(nb):
 
 # --- D: R^2 stability across all independent retrainings ---------------
 if not os.path.exists(RUNS_CSV):
-    raise SystemExit(f"{RUNS_CSV} not found — no retrainings recorded under "
+    raise SystemExit(f"{RUNS_CSV} not found, no retrainings recorded under "
                      f"the {ENGINE_VERSION} physics yet; run overnight.sh first")
 rows = [r for r in csv.DictReader(open(RUNS_CSV))
         if r["samples"] == "150000" and r["epochs"] == "250"
         and r["pmma"] == "1"]                       # paper protocol only
 if not rows:
     raise SystemExit("no paper-protocol rows (150000 samples / 250 epochs) in "
-                     f"{RUNS_CSV} yet — run overnight.sh first")
+                     f"{RUNS_CSV} yet, run overnight.sh first")
 r2_mtf = [float(r["R2_MTF@40cyc/mm"]) for r in rows]
-# split retrainings into overnight runs by detecting seed resets — the
+# split retrainings into overnight runs by detecting seed resets, the
 # previous hardcoded row count (33) mislabeled runs whenever the history
 # didn't match it (here run 2 actually appended 31 rows, run 1 had 42)
 seeds_hist = [int(r["seed"]) for r in rows]
@@ -154,7 +154,7 @@ axA.set_yscale("log")
 axA.set_ylim(min(vals) * 0.5, max(vals) * 6)
 axA.set_xticks(range(4)); axA.set_xticklabels(names, fontsize=8.5)
 axA.set_ylabel("prediction error (MSE, log scale)")
-axA.set_title(f"A — Same accuracy on data it has never seen\n"
+axA.set_title(f"A, Same accuracy on data it has never seen\n"
               f"(never-seen error only {ratio:.1f}x training error; "
               f"memorization would be 100x+)", fontsize=10)
 axA.grid(alpha=0.25, axis="y")
@@ -165,7 +165,7 @@ axB.plot([lo, hi], [lo, hi], "--", color=C_IDENT, lw=1, zorder=1)
 axB.scatter(t, p, s=5, alpha=0.3, color=C_REF, edgecolors="none", zorder=2)
 axB.set_xlabel("true value (exact physics)")
 axB.set_ylabel("network prediction")
-axB.set_title(f"B — Parity on the brand-new set (MTF)\n"
+axB.set_title(f"B, Parity on the brand-new set (MTF)\n"
               f"15,000 designs generated today, R$^2$ = {r2_fresh_mtf:.5f}",
               fontsize=10)
 axB.grid(alpha=0.25)
@@ -177,7 +177,7 @@ axC.plot(bx, by, "-o", color=C_SURR, lw=2, ms=4, zorder=3,
 axC.set_yscale("log")
 axC.set_xlabel("distance to nearest training example (normalized design space)")
 axC.set_ylabel("prediction error (per-design RMSE, log)")
-axC.set_title(f"C — Error does NOT grow away from the training data\n"
+axC.set_title(f"C, Error does NOT grow away from the training data\n"
               f"correlation = {corr:+.3f} (memorization would be strongly "
               f"positive)", fontsize=10)
 axC.grid(alpha=0.25); axC.legend(fontsize=8, loc="upper right")
@@ -192,12 +192,12 @@ axD.axhline(1.0, color=C_IDENT, lw=1, ls="--")
 axD.set_ylim(min(r2_mtf) - 0.0005, 1.0006)
 axD.set_xlabel("independent retraining # (fresh network + fresh data each time)")
 axD.set_ylabel("R$^2$ on held-out test set (MTF)")
-axD.set_title(f"D — {len(r2_mtf)} independent retrainings, all equally "
+axD.set_title(f"D, {len(r2_mtf)} independent retrainings, all equally "
               f"accurate\n(memorization is seed-brittle; learning is stable)",
               fontsize=10)
 axD.grid(alpha=0.25); axD.legend(fontsize=8, loc="lower right")
 
-fig.suptitle("Memorization audit — the deployed surrogate is scored ONLY on "
+fig.suptitle("Memorization audit, the deployed surrogate is scored ONLY on "
              "designs it never trained on", fontsize=12)
 fig.tight_layout(rect=(0, 0, 1, 0.97))
 out = os.path.join(ROOT, "figures/memorization_audit.png")

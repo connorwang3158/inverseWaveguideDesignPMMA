@@ -5,7 +5,7 @@ forward surrogate network.
 This is the neural-adjoint method (Ren, Padilla & Malof, NeurIPS 2020): freeze
 the trained ForwardNet, treat the DESIGN PARAMETERS as the trainable variables,
 and run gradient ascent where every gradient is back-propagated through the
-neural network's weights — the network's learned understanding of the physics
+neural network's weights, the network's learned understanding of the physics
 steers the search. Multi-start (hundreds of random initial designs in parallel)
 avoids local optima.
 
@@ -17,7 +17,7 @@ avoids local optima.
 
 Honesty step: every finalist design is re-scored with the EXACT physics engine,
 ranked by its TRUE objective, and the surrogate-vs-physics gap is reported and
-plotted — a design only counts if the real physics agrees with the network.
+plotted, a design only counts if the real physics agrees with the network.
 
 Usage (from the project root):
     python3 networks/surrogate.py --pmma        # first: train the surrogate
@@ -49,7 +49,7 @@ from physics.waveguide_physics import (
 from networks.surrogate import load_surrogate
 
 W_MTF, W_T, W_CA = 1.0, 1.0, 0.5   # objective weights (match optimize_pmma.py)
-W_TIR = 10.0   # TIR-feasibility penalty weight (FIX-1) — same as optimize_pmma,
+W_TIR = 10.0   # TIR-feasibility penalty weight, same as optimize_pmma,
                # so the two methods maximize the SAME objective and their hall-
                # of-fame scores are directly comparable
 
@@ -110,8 +110,8 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
           f"mean {gap.mean():.4f} | worst {gap.max():.4f}")
 
     # physical validity flag: all RGB first orders inside the guiding window
-    # 1 < sin(theta_i)+lambda/period < n (the v2 engine's FIX-1 inequality).
-    # Uses margin=0 — the PHYSICAL window — not the optimizer's 0.01 safety
+    # 1 < sin(theta_i)+lambda/period < n (the guiding inequality).
+    # Uses margin=0, the PHYSICAL window, not the optimizer's 0.01 safety
     # margin, which previously flagged genuinely guided designs near the
     # window edge (e.g. blue at period 449 nm) as unguided (false negatives).
     tir_ok = tir_penalty(theta, margin=0.0) <= 0.0
@@ -140,7 +140,7 @@ def search(n_starts=400, n_steps=600, lr=0.05, topk=5, seed=0, quick=False):
     print("\nSaved winners -> results/optimal_designs_na.csv")
 
     # hall of fame (shared with optimize_pmma.py): physics-scored record only.
-    # Keyed on ENGINE_VERSION — records under different physics engines are
+    # Keyed on ENGINE_VERSION, records under different physics engines are
     # not comparable (v1: pre-TIR leaky designs; v2: TIR-constrained scalar
     # coupling; v3: RCWA-calibrated coupling).
     hof = res_path(f"best_design_ever_{ENGINE_VERSION}.csv")

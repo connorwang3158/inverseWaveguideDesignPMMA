@@ -1,7 +1,7 @@
 """
 v3 physics calibration: rigorous RCWA grid behind the engine's coupling term.
 
-Builds physics/rcwa_eta_grid.npz — the lookup table behind the v3 engine's
+Builds physics/rcwa_eta_grid.npz, the lookup table behind the v3 engine's
 RCWA-calibrated grating-coupling term (waveguide_physics.eta_rcwa): the
 first-order transmitted efficiency of the binary PMMA in-coupler, solved
 VECTORIALLY with grcwa (Moharam & Gaylord RCWA) on a dense grid over the PMMA
@@ -10,7 +10,7 @@ design window:
     n (1.48..1.50) x period (430..449 nm) x depth (20..400 nm)
     x duty (0.2..0.8) x wavelength (450/532/635 nm) x polarization (TE, TM)
 
-Why (2026-07-13 audit, results/design_rcwa_check_na.csv): at the TIR-mandated
+Why: at the TIR-mandated
 PMMA periods (430-449 nm, BELOW the visible wavelengths), scalar diffraction
 theory overestimates first-order coupling ~5x at 532 nm and ~15x at 635 nm,
 and puts the depth optimum at the wrong place (scalar keeps climbing to the
@@ -28,7 +28,7 @@ error class this calibration removes.
 
 After building, the script verifies the engine's trilinear interpolant
 against FRESH grcwa solves at random OFF-GRID points and records the
-comparison in results/rcwa_calibration_check.csv — that file is the L2
+comparison in results/rcwa_calibration_check.csv, that file is the L2
 evidence that the interpolation error is negligible next to the ~5-15x
 scalar error it replaces.
 
@@ -77,7 +77,7 @@ def _init_worker(ns, periods, depths, duties):
     """Install the parent's grid axes in the worker. Required for --quick
     correctness on macOS/Windows: their spawn start method re-imports this
     module in each worker, which would silently restore the FULL axes while
-    the parent hands out quick-grid indices — every solve would then run at
+    the parent hands out quick-grid indices, every solve would then run at
     the wrong coordinates. (Linux fork inherits the rebinding and never
     noticed.)"""
     global NS, PERIODS, DEPTHS, DUTIES
@@ -173,7 +173,7 @@ def main():
     global DEPTHS, DUTIES, PERIODS, N_OFFGRID
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true",
-                    help="coarse smoke grid — never commit this")
+                    help="coarse smoke grid, never commit this")
     ap.add_argument("--procs", type=int, default=None)
     args = ap.parse_args()
     if args.quick:

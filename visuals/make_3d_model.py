@@ -5,17 +5,17 @@ Reads the winning design (optimal_designs_na.csv from the neural-adjoint
 search, falling back to the current engine's hall-of-fame record, then the
 archived v2 record, then sensible defaults), then writes:
 
-  waveguide_3d.html    interactive 3D viewer — rotate/zoom with the mouse,
+  waveguide_3d.html    interactive 3D viewer, rotate/zoom with the mouse,
                        drag sliders to change the design, watch the RGB ray
                        paths and grating geometry update live. Fully
                        self-contained (its own software renderer, no internet
-                       needed) — just double-click it.
-  waveguide_model.stl  the same geometry as a standard STL mesh — opens in
+                       needed), just double-click it.
+  waveguide_model.stl  the same geometry as a standard STL mesh, opens in
                        any 3D viewer/slicer (macOS Quick Look, Windows 3D
                        Viewer, Blender, PrusaSlicer) and is 3D-printable
 
-Scale note: real grating teeth are a few hundred NANOMETERS — invisible next
-to a millimeter slab — so the couplers are drawn with the tooth geometry
+Scale note: real grating teeth are a few hundred NANOMETERS, invisible next
+to a millimeter slab, so the couplers are drawn with the tooth geometry
 magnified by GRATING_ZOOM (labeled in the viewer). Proportions within the
 grating (period : depth : duty) are true to the design.
 
@@ -32,7 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import res_path, root_path
 from physics.waveguide_physics import ENGINE_VERSION
 
-# slab footprint (mm) — typical AR-combiner eyepiece scale
+# slab footprint (mm), typical AR-combiner eyepiece scale
 SLAB_L, SLAB_W = 30.0, 12.0
 COUPLER_L, COUPLER_W = 6.0, 8.0     # grating patch footprint (mm)
 GRATING_ZOOM = 2000.0               # nm-scale teeth magnified for visibility
@@ -61,13 +61,13 @@ def load_best_design():
                   f"period {d['period_nm']:.0f} nm, depth {d['depth_nm']:.0f} nm, "
                   f"duty {d['duty']:.2f}, t {d['t_mm']:.2f} mm")
             return d
-    print("[3d] no result CSVs found — using default design "
+    print("[3d] no result CSVs found, using default design "
           "(run neural_adjoint.py to feed in a real winner)")
     return dict(DEFAULTS)
 
 
 # ---------------------------------------------------------------------------
-# STL export (ASCII) — boxes only: slab + magnified grating teeth
+# STL export (ASCII), boxes only: slab + magnified grating teeth
 # ---------------------------------------------------------------------------
 
 def _box_facets(cx, cy, cz, sx, sy, sz):
@@ -117,7 +117,7 @@ def write_stl(design, path=None):
 
 
 # ---------------------------------------------------------------------------
-# Interactive HTML viewer — self-contained painter's-algorithm 3D renderer,
+# Interactive HTML viewer, self-contained painter's-algorithm 3D renderer,
 # so the page works with no internet and no libraries, on any computer.
 # ---------------------------------------------------------------------------
 
@@ -125,7 +125,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PMMA Waveguide — 3D Model</title>
+<title>PMMA Waveguide, 3D Model</title>
 <style>
   :root { --bg:#10141c; --panel:#1a2130; --ink:#e8ecf5; --dim:#8b96ab; --acc:#5aa9ff; }
   * { box-sizing:border-box; margin:0; }
@@ -148,7 +148,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 <body>
 <canvas id="cv"></canvas>
 <div class="panel">
-  <h1>PMMA Waveguide — 3D Model</h1>
+  <h1>PMMA Waveguide, 3D Model</h1>
   <div class="sub">Drag to rotate &middot; scroll to zoom.
   Grating teeth magnified &times;__ZOOM__ (period:depth:duty proportions are true).</div>
   <label>Grating period &Lambda; <b id="v_per"></b></label>
@@ -166,7 +166,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
     <div class="m"><span>Scalar coupling efficiency &eta;&#8321;</span><b id="m_eta"></b></div>
     <div class="m"><span>TIR bounces across the slab</span><b id="m_bn"></b></div>
   </div>
-  <div class="note">Rays: blue 450 nm, green 532 nm, red 635 nm — angles from the
+  <div class="note">Rays: blue 450 nm, green 532 nm, red 635 nm, angles from the
   in-guide grating equation n&thinsp;sin&theta; = &lambda;/&Lambda; (n = 1.49). The RGB fan
   widening with propagation IS the chromatic-spread metric the networks optimize.
   Sliders start at the current best design found by the neural-adjoint search.</div>
@@ -304,7 +304,7 @@ function rebuild(p) {
   const deg = r => (r * 180 / Math.PI).toFixed(1) + "°";
   document.getElementById("m_ang").textContent = deg(thG);
   const tEl = document.getElementById("m_tir");
-  tEl.textContent = tir ? "yes" : "NO — light escapes";
+  tEl.textContent = tir ? "yes" : "NO, light escapes";
   tEl.className = tir ? "ok" : "bad";
   document.getElementById("m_ca").textContent = deg(angR - angB);
   document.getElementById("m_eta").textContent = (100 * eta).toFixed(1) + "%";
