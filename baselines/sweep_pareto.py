@@ -17,8 +17,8 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from paths import fig_path, res_path
 from physics.waveguide_physics import (
-    SPEC_SCALE, forward_model, use_pmma, sample_theta, normalize_theta,
-    denormalize_theta, tir_penalty,
+    ENGINE_VERSION, SPEC_SCALE, forward_model, use_pmma, sample_theta,
+    normalize_theta, denormalize_theta, tir_penalty,
 )
 
 N_STARTS, N_STEPS, LR = 80, 200, 0.03
@@ -59,12 +59,20 @@ def main():
         print(f"w=({w_mtf},{w_T},{w_ca}) -> MTF {mtf:.4f} | T {100*T:.2f}% | "
               f"walkoff {ca:.2f}mm | period {theta[5]:.0f}nm depth {theta[6]:.0f}nm "
               f"duty {theta[7]:.2f} t {theta[4]:.2f}mm")
-        rows.append([w_mtf, w_T, w_ca, mtf, T, ca, T_fov] + theta.tolist())
+        rows.append([w_mtf, w_T, w_ca, mtf, T, ca, T_fov] + theta.tolist()
+                    + [ENGINE_VERSION])
 
-    with open(res_path("pareto_results.csv"), "w", newline="") as f:
-        wr = csv.writer(f)
-        wr.writerow(["w_mtf", "w_T", "w_ca", "MTF", "T", "walkoff_mm", "T_fov"] + LABELS)
-        wr.writerows(rows)
+    # `engine` as the last column + a version-stamped copy: a Pareto front from
+    # one physics engine can never again masquerade as another's (this file was
+    # the stale, unversioned v2-era artifact flagged in the data audit).
+    header = (["w_mtf", "w_T", "w_ca", "MTF", "T", "walkoff_mm", "T_fov"]
+              + LABELS + ["engine"])
+    for path in (res_path("pareto_results.csv"),
+                 res_path(f"pareto_results_{ENGINE_VERSION}.csv")):
+        with open(path, "w", newline="") as f:
+            wr = csv.writer(f)
+            wr.writerow(header)
+            wr.writerows(rows)
 
     try:
         import matplotlib

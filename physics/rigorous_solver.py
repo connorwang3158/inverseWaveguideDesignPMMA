@@ -47,6 +47,14 @@ except ImportError as e:
 N_PMMA = 1.49           # PMMA refractive index (Nilsen et al. 2025 range midpoint)
 NG = 61                 # Fourier orders retained; convergence_check() shows
                         # T(+1) stable to 5 decimals already at nG=41
+
+# Representative period for the scalar-vs-RCWA validation sweep. This MUST sit
+# inside the TIR-guided PMMA window (~430-449 nm, waveguide_physics FIX-1); the
+# old default of 500 nm is OUTSIDE that window and does not guide RGB, so a
+# "validation" there does not describe the regime any headline design uses.
+# (The large-period approach to scalar theory is separately covered by
+# validate.py V4.) Kept equal to the record period.
+GUIDED_PERIOD_NM = 438.2
 PERIOD_Y_NM = 50.0      # dummy sub-wavelength y-period (1D grating in 2D solver)
 
 
@@ -198,23 +206,29 @@ def verify_designs(csv_in=None, csv_out=None,
 def main():
     import csv
     convergence_check()
-    print("\nScalar vs RCWA (binary PMMA grating, 500nm period, 532nm, normal incidence)")
+    per = GUIDED_PERIOD_NM
+    print(f"\nScalar vs RCWA (binary PMMA grating, {per:.1f}nm period [guided window], "
+          f"532nm, normal incidence)")
     print(f"{'depth':>6} {'scalar':>8} {'RCWA-TE':>8} {'RCWA-TM':>8} {'unpol':>8}")
     rows = []
     for depth in (50, 100, 150, 200, 250, 300, 350, 400):
         s = scalar_eta(depth, 0.5)
-        unp, te, tm = eta_unpolarized(500, depth, 0.5)
-        rows.append([depth, s, te, tm, unp])
+        unp, te, tm = eta_unpolarized(per, depth, 0.5)
+        rows.append([per, depth, s, te, tm, unp])
         print(f"{depth:6d} {s:8.4f} {te:8.4f} {tm:8.4f} {unp:8.4f}")
     with open(res_path("rcwa_validation.csv"), "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["depth_nm", "scalar_eta1", "rcwa_TE", "rcwa_TM", "rcwa_unpol"])
+        # period_nm is now an explicit column so the geometry is self-documenting
+        # and this file can never again be mistaken for the record regime.
+        w.writerow(["period_nm", "depth_nm", "scalar_eta1",
+                    "rcwa_TE", "rcwa_TM", "rcwa_unpol"])
         w.writerows(rows)
     print("saved -> results/rcwa_validation.csv")
 
-    print("\nProfile comparison at depth=300nm (unpolarized first-order):")
+    print(f"\nProfile comparison at period={per:.1f}nm, depth=300nm "
+          f"(unpolarized first-order):")
     for prof in PROFILES:
-        unp, te, tm = eta_unpolarized(500, 300, 0.5, profile=prof)
+        unp, te, tm = eta_unpolarized(per, 300, 0.5, profile=prof)
         print(f"  {prof:11s} eta1={unp:.4f}  (TE {te:.4f} / TM {tm:.4f})")
 
 
