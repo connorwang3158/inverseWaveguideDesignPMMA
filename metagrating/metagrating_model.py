@@ -15,7 +15,7 @@ Implements the locked spec (SPEC_DECISIONS_METAGRATING.md):
 
 Engine: grcwa with the autograd backend (differentiable; energy conservation
 verified to ~1e-14 in validate.py). meent is the independent cross-check
-(crosscheck_meent.py) — the spec's engine-swap clause applies (grcwa primary).
+(crosscheck_meent.py), the spec's engine-swap clause applies (grcwa primary).
 
 Design-field pipeline (all steps autograd-differentiable and monotone-
 preserving, so the no-overhang guarantee survives filtering & projection):
@@ -27,10 +27,10 @@ preserving, so the no-overhang guarantee survives filtering & projection):
       -> Wang-Lazarov-Sigmund projection (beta, eta)  -> occupancy in (0,1)
       -> eps(x) = 1 + (n^2-1)*occupancy  -> grcwa GridLayer -> eta_{-1}
 
-Physics anchors: RCWA — Moharam & Gaylord (1981), Moharam et al. (1995);
-factorization — Li (1996); topology optimization with filter+projection —
+Physics anchors: RCWA, Moharam & Gaylord (1981), Moharam et al. (1995);
+factorization, Li (1996); topology optimization with filter+projection, 
 Wang, Lazarov & Sigmund, Struct. Multidisc. Optim. 43, 767 (2011); robust
-eroded/nominal/dilated — Wang et al., and standard photonic TO practice
+eroded/nominal/dilated, Wang et al., and standard photonic TO practice
 (Jensen & Sigmund, Laser Photonics Rev. 5, 308 (2011)).
 
 Units: nm for lengths; wavelength 532 nm.

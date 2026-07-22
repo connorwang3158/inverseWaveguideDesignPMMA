@@ -2,7 +2,7 @@
 Live self-updating dashboard + per-metric hall of fame for the metagrating
 study. The optimizer calls update() every few iterations; this rewrites
 metagrating_live.html (which auto-reloads itself every 3 s via meta-refresh),
-and record() maintains metagrating_hof.json — the best-ever design per metric
+and record() maintains metagrating_hof.json, the best-ever design per metric
 (eta_TE, eta_TM, eta_unpol), across ALL runs and both arms. Open
 metagrating_live.html in a browser and leave it open while optimizing.
 """
@@ -84,7 +84,7 @@ def update(state):
     cur = hist[-1] if hist else 0.0
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta http-equiv="refresh" content="3">
-<title>Metagrating optimization — LIVE</title>
+<title>Metagrating optimization, LIVE</title>
 <style>body{{background:#0d1117;color:#e8ecf5;font:13px -apple-system,sans-serif;
 max-width:700px;margin:24px auto}} h1{{font-size:17px}} h2{{font-size:13px;color:#5aa9ff;
 text-transform:uppercase;letter-spacing:.5px;margin-top:18px}}
@@ -92,7 +92,7 @@ table{{border-collapse:collapse;width:100%;font-size:12px}}
 td,th{{border-bottom:1px solid #222c3d;padding:4px 8px;text-align:left}}
 .big{{font-size:26px;font-weight:700;color:#59d98c}}
 .dim{{color:#8b96ab}}</style></head><body>
-<h1>PMMA metagrating optimization — live <span class="dim">(auto-refreshes)</span></h1>
+<h1>PMMA metagrating optimization, live <span class="dim">(auto-refreshes)</span></h1>
 <div class="dim">{time.strftime("%H:%M:%S")} · arm: <b>{state.get('arm','-')}</b> ·
 Λ = {state.get('period','-')} nm · seed {state.get('seed','-')} ·
 start {state.get('start','-')} · β = {state.get('beta','-')} ·
@@ -103,7 +103,7 @@ iter {state.get('iteration',0)}/{state.get('total_iters','?')} ·
 {_svg_history(hist)}
 <h2>Current design (one period, ρ(x,z))</h2>
 {_svg_design(state.get('occ'))}
-<h2>Hall of fame — best ever, all runs</h2>
+<h2>Hall of fame, best ever, all runs</h2>
 <table><tr><th>metric</th><th>record</th><th>arm</th><th>when</th></tr>{rows}</table>
 <div class="dim" style="margin-top:8px">{state.get('note','')}</div>
 </body></html>"""

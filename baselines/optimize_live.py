@@ -76,7 +76,7 @@ def main():
                 fig.canvas.draw(); fig.canvas.flush_events(); plt.pause(0.01)
 
     plt.ioff()
-    print("done — close the window to exit; final design shown on the right")
+    print("done, close the window to exit; final design shown on the right")
     plt.show()
 
 

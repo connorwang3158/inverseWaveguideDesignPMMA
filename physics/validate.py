@@ -1,5 +1,5 @@
 """
-Independent validation suite — proof of accuracy WITHOUT reference to Paper 1.
+Independent validation suite, proof of accuracy WITHOUT reference to Paper 1.
 
 Every test compares the code against ground truths that are external and
 unimpeachable: closed-form textbook results, conservation laws, and symmetries
@@ -28,13 +28,13 @@ Tests:
   V9 Brewster / vector      the polarized Fresnel factor must vanish for TM
                             reflection at Brewster's angle th_B=atan(n) and
                             satisfy T_unpol = (T_TE+T_TM)/2 exactly.
-  V10 Watson eye MTF (v5)   the mean-human-eye MTF term must reproduce
+  V10 Watson eye MTF   the mean-human-eye MTF term must reproduce
                             Watson (2013): at 3 mm pupil / ~11.9 cyc/deg it
                             sits in the published 0.45-0.55 window, strictly
                             BELOW the 0.847 diffraction limit, and -> 1 at
                             zero frequency.
   V11 Walk-off consistency  the chromatic pupil walk-off must drive BOTH
-      (v5)                  spec[2] and the MTF (via the apodized pupil):
+                       spec[2] and the MTF (via the apodized pupil):
                             doubling the source bandwidth must raise the
                             walk-off metric and strictly lower MTF_system.
 """
@@ -81,7 +81,7 @@ def v4_scalar_limit():
     """Scalar theory must emerge from RCWA as features grow vs wavelength.
     NOTE: periods >~8um at high nG trigger a known RCWA numerical overflow in
     deeply evanescent orders; we therefore test at period 4um (s=3.8 lambda),
-    where energy conservation still holds to machine precision — and REQUIRE
+    where energy conservation still holds to machine precision, and REQUIRE
     conservation before admitting the comparison. Trend agrees with Pommet
     et al. 1994 (scalar error shrinks as s/lambda grows)."""
     lam, per, depth = 532.0, 4000.0, 300.0
@@ -183,7 +183,7 @@ def v11_walkoff_consistency():
     mtf_down = bool((y2[:, 0] < y1[:, 0]).all())
     check("V11 Walk-off consistency", walk_up and mtf_down,
           f"2x bandwidth: walk-off up for 32/32 designs ({walk_up}), "
-          f"MTF down for 32/32 ({mtf_down}) — spec[2] and MTF share one "
+          f"MTF down for 32/32 ({mtf_down}), spec[2] and MTF share one "
           f"walk-off model")
 
 

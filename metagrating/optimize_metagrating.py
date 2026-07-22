@@ -1,6 +1,6 @@
 """
 Two-arm optimization for the PMMA metagrating in-coupler study
-(SPEC_DECISIONS_METAGRATING.md — all four locked decisions implemented).
+(SPEC_DECISIONS_METAGRATING.md, all four locked decisions implemented).
 
   Arm 1 (baseline): parametric slanted SRG {slant, duty, depth, period},
          differential evolution + Nelder-Mead polish (derivative-free polish
@@ -37,7 +37,7 @@ from metagrating_model import (
 )
 import metagrating_dashboard as dash
 
-# anchor all outputs to this folder — previously they were CWD-relative, so
+# anchor all outputs to this folder, previously they were CWD-relative, so
 # running `python3 metagrating/optimize_metagrating.py` from the project root
 # scattered result files at the root instead of updating the ones in here
 _HERE = os.path.dirname(os.path.abspath(__file__))

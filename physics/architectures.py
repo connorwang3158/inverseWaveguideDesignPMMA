@@ -37,7 +37,7 @@ def _band_chromatic_deg(n, period, band):
 
 def _off_band_eta(n, depth, duty, wl_other):
     """Scalar first-order efficiency of a grating at the OTHER band's wavelength
-    (this is the leakage term kappa — computed, not assumed)."""
+    (this is the leakage term kappa, computed, not assumed)."""
     phi = 2 * torch.pi * depth * (n - 1.0) / wl_other
     return 4.0 * (torch.sin(torch.pi * duty) / torch.pi) ** 2 * torch.sin(phi / 2) ** 2
 
@@ -87,7 +87,7 @@ def uniform_mirror_reflectances(M: int) -> torch.Tensor:
 
 def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.01,
                         eta_in: float = 0.90, pupil_overlap=None):
-    """theta: [B,8] (grating dims 5-7 ignored — no gratings). Framework 2.3.
+    """theta: [B,8] (grating dims 5-7 ignored, no gratings). Framework 2.3.
     embed_loss: per-mirror coating/embed absorption. eta_in: in-coupling prism
     efficiency. pupil_overlap: [M] weights A_k (default: single 3mm pupil sees
     ~2 of M exit pupils)."""
@@ -113,7 +113,7 @@ def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.0
 
     # bulk + roughness along the TIR path (propagation angle set by prism, ~50 deg)
     ang = torch.deg2rad(torch.tensor(50.0))
-    NB = n_bounces(t, ang)                # geometric bounce count (FIX-4)
+    NB = n_bounces(t, ang)                # geometric bounce count
     T_bulk = torch.exp(-alpha * NB * t / torch.cos(ang))
     pb = (4 * torch.pi * (sigma * 1e-6) * n * torch.cos(ang) / 532e-6) ** 2
     T_scatter = torch.exp(-pb * (1.0 / (1.0 + Lc / 3e5)) * NB * 0.5)
@@ -122,14 +122,13 @@ def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.0
 
     T = T_fresnel * T_bulk * T_scatter * eta_in * (out_frac * pupil_overlap).sum(dim=1)
 
-    # chromatic: bounded, not modeled (framework 2.3) — report the bound
+    # chromatic: bounded, not modeled (framework 2.3), report the bound
     chrom_bound = torch.full((B,), 0.1)
 
-    # MTF: no grating terms; coating scatter + mirror-edge term (L1 placeholder,
-    # promote at G4)  # SYNC-L2
-    # v5: use the SAME Watson mean-eye anchor as the diffractive arms —
-    # keeping the old aberration-free 0.847 term here would bias the
-    # cross-architecture comparison ~1.7x toward this arm (FIX-12).
+    # MTF: no grating terms, just a coating-scatter and mirror-edge
+    # placeholder. Use the same Watson mean-eye anchor as the diffractive
+    # arms so the cross-architecture comparison is not biased toward this
+    # one.  # SYNC
     from waveguide_physics import PUPIL_MM, watson_eye_mtf
     mtf_d = watson_eye_mtf(40.0, torch.tensor([PUPIL_MM]))
     mtf = mtf_d * 0.97 * 0.94 * torch.ones(B)
@@ -139,7 +138,7 @@ def geometric_waveguide(theta: torch.Tensor, M: int = 4, embed_loss: float = 0.0
 
 
 # ----------------------------------------------------------------------------
-# Gates G2 & G3 (framework Section 4) — run: python3 architectures.py
+# Gates G2 & G3 (framework Section 4), run: python3 architectures.py
 # ----------------------------------------------------------------------------
 
 def run_gates():

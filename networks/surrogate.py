@@ -5,15 +5,15 @@ This is the machine-learning core of the modern inverse-design framework
 (Peurifoy et al., Sci. Adv. 2018; Liu et al., ACS Photonics 2018; and the
 2024-2025 AR-waveguide tandem papers in CITATIONS.md Group C): a deep network
 is trained on simulated (design -> performance) pairs until it can emulate the
-physics itself. Every later stage — the tandem inverse network and the
-neural-adjoint design search — then optimizes THROUGH this trained network.
+physics itself. Every later stage, the tandem inverse network and the
+neural-adjoint design search, then optimizes THROUGH this trained network.
 
     design theta (8)  ──►  ForwardNet (MLP)  ──►  predicted spec y_hat (4)
     trained on N samples labeled by the analytic physics engine
     (waveguide_physics.py), exactly as the cited works train on RCWA/FDTD data.
 
 The exact physics stays available as ground truth, so every surrogate
-prediction can be honestly scored (parity plots, R^2 per metric) — that
+prediction can be honestly scored (parity plots, R^2 per metric), that
 physics-anchored verification is this project's twist on the standard recipe.
 
 Usage:
@@ -47,7 +47,7 @@ from physics.waveguide_physics import (
 # Fixed dataset seeds. Training data uses TRAIN_SEED_BASE + seed, which can
 # never collide with the validation/test seeds below (previously the training
 # seed was 100+seed, so --seed 100 made the training set IDENTICAL to the
-# validation set, and --seed 200 identical to the test set — silent leakage).
+# validation set, and --seed 200 identical to the test set, silent leakage).
 VAL_SEED, TEST_SEED = 200, 300
 TRAIN_SEED_BASE = 1000
 # fixed-size comparison set for the "best checkpoint ever" decision (see train)
@@ -91,7 +91,7 @@ def physics_probe() -> torch.Tensor:
     Stored in every checkpoint: a surrogate is only valid while the live
     waveguide_physics.py reproduces its stored probe. This catches physics
     revisions (like the 2026-07 TIR fix) that silently invalidate a trained
-    surrogate — a surrogate trained on old-physics labels confidently steers
+    surrogate, a surrogate trained on old-physics labels confidently steers
     searches into designs the corrected physics rejects."""
     g = torch.Generator().manual_seed(1234)
     z = torch.rand(64, 8, generator=g)
@@ -109,12 +109,12 @@ def load_surrogate(path: str = None) -> ForwardNet:
     (PMMA vs full, including the PMMA FOV metric angle), so every downstream
     consumer scores physics exactly as the surrogate saw it in training.
     Refuses checkpoints whose stored physics probe no longer matches the live
-    physics engine — those predictions are stale and must be retrained."""
+    physics engine, those predictions are stale and must be retrained."""
     if path is None:
         path = ckpt_path("forward_surrogate.pt")
     if not os.path.exists(path):
         raise SystemExit(
-            f"{path} not found — train the forward surrogate first:\n"
+            f"{path} not found, train the forward surrogate first:\n"
             f"    python3 networks/surrogate.py --pmma")
     ck = torch.load(path, weights_only=True)
     if ck.get("pmma"):
@@ -122,12 +122,12 @@ def load_surrogate(path: str = None) -> ForwardNet:
     else:
         use_full()          # restore full-space bounds AND the 20-deg FOV
                             # metric (a prior use_pmma() call would otherwise
-                            # leave the FOV angle at 5 deg — silent mismatch)
+                            # leave the FOV angle at 5 deg, silent mismatch)
     BOUNDS.copy_(ck["bounds"])
     if not _probe_matches(ck.get("probe_spec"), physics_probe()):
         raise SystemExit(
             f"{path} was trained under a DIFFERENT waveguide_physics.py than "
-            f"the current one — its learned physics is stale and would steer "
+            f"the current one, its learned physics is stale and would steer "
             f"every search into invalid designs.\n"
             f"Retrain first:  python3 networks/surrogate.py --pmma")
     net = ForwardNet(hidden=ck["hidden"], depth=ck["depth"])
@@ -147,7 +147,7 @@ def _comparison_mse(model: ForwardNet) -> float:
     current bounds/physics). Used for the 'best checkpoint ever' decision:
     the training-time best_val is a WEIGHTED MSE whose per-metric weights
     depend on each run's training data, so best_val values from different
-    runs are not comparable — this metric is."""
+    runs are not comparable, this metric is."""
     z, y = make_dataset(CMP_N, seed=CMP_SEED)
     model.eval()
     return nn.functional.mse_loss(model(z), y).item()
@@ -239,7 +239,7 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
     print(f"Saved weights -> checkpoints/forward_surrogate_seed{seed}.pt")
 
     # keep forward_surrogate.pt = the best surrogate ever trained in this space
-    # AND under the current physics — a checkpoint from an older physics engine
+    # AND under the current physics, a checkpoint from an older physics engine
     # is stale regardless of its val score, so it is always replaced. The
     # comparison uses the fixed-set UNWEIGHTED MSE (comparable across runs);
     # old checkpoints without a stored cmp_val are re-scored on the fly.
@@ -262,7 +262,7 @@ def train(n_train=50000, epochs=80, batch=512, lr=1e-3, seed=0, quick=False,
         print("checkpoints/forward_surrogate.pt updated (new best for this "
               "design space under the current physics)")
 
-    # run table keyed on the physics engine version — v2-era rows live in
+    # run table keyed on the physics engine version, v2-era rows live in
     # surrogate_runs.csv and must never be pooled with rows trained under a
     # different physics (they answer a different regression problem)
     runs_csv = res_path(f"surrogate_runs_{ENGINE_VERSION}.csv")
@@ -297,7 +297,7 @@ def make_figures(history, y_hat, y_te, r2):
     ax.semilogy(eps, va, color=C_VAL, label="validation MSE")
     ax.set_xlabel("epoch (pass through dataset)")
     ax.set_ylabel("loss (log scale, lower = better)")
-    ax.set_title("Forward surrogate network — learning the physics")
+    ax.set_title("Forward surrogate network, learning the physics")
     ax.grid(alpha=0.25); ax.legend()
     fig.tight_layout(); fig.savefig(fig_path("surrogate_loss_curve.png"), dpi=150)
     plt.close(fig)

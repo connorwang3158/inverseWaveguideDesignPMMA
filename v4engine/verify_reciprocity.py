@@ -1,4 +1,4 @@
-"""Reciprocity verification for the out-coupler (2026-07-17 audit, §2.5).
+"""Reciprocity verification for the out-coupler.
 
 The transmission cascade applies the in-coupler's eta_1 to the out-coupler.
 The out-coupler is a DIFFERENT electromagnetic problem: PMMA superstrate,

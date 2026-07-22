@@ -1,5 +1,5 @@
 """
-Generate waveguide_designs_3d.html — an interactive Three.js visualization of
+Generate waveguide_designs_3d.html, an interactive Three.js visualization of
 the top optimized PMMA waveguide designs.
 
 Reads:  optimal_designs.csv      (from optimize_pmma.py, physics v2 columns)
@@ -9,7 +9,7 @@ Writes: waveguide_designs_3d.html (self-contained; double-click to open)
 The page embeds a JavaScript port of the v2-ERA scalar engine (field-angle
 grating equation, TIR guiding window, polarization-resolved Fresnel, v2
 bounce count, Tien roughness, scalar grating efficiency) for interactive
-ILLUSTRATION ONLY — it does NOT match the current v5 Python engine (RCWA
+ILLUSTRATION ONLY, it does NOT match the current v5 Python engine (RCWA
 coupling, Watson eye MTF, walk-off chromatics, re-interaction term are not
 ported). Quotable numbers come from the CSVs and the Python engine; RCWA
 TE/TM efficiencies (exact vector Maxwell solutions) are shown alongside
@@ -34,7 +34,7 @@ OUT_HTML = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 def load_designs():
     if not os.path.exists(DESIGNS_CSV):
-        raise SystemExit(f"{DESIGNS_CSV} not found — run optimize_pmma.py first")
+        raise SystemExit(f"{DESIGNS_CSV} not found, run optimize_pmma.py first")
     with open(DESIGNS_CSV) as f:
         rows = list(csv.DictReader(f))
     designs = []
@@ -74,7 +74,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>PMMA AR Waveguide — Top Designs in 3D</title>
+<title>PMMA AR Waveguide, Top Designs in 3D</title>
 <style>
   :root { --bg:#0d1117; --panel:#161d29; --ink:#e8ecf5; --dim:#8b96ab; --acc:#5aa9ff; }
   * { box-sizing:border-box; margin:0; }
@@ -104,7 +104,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <body>
 <div id="scene"></div>
 <div class="hud">
-  <h1>PMMA AR Waveguide — Top Designs (3D)</h1>
+  <h1>PMMA AR Waveguide, Top Designs (3D)</h1>
   <div class="sub">Illustrative v2-era scalar physics (live JS); quotable numbers
   come from the v5 Python engine + RCWA CSVs. Drag = orbit, wheel = zoom.
   Grating relief exaggerated ×2000 for visibility.</div>
@@ -276,7 +276,7 @@ function build(d,fiDeg,pol){
     const c=RGBHEX[k];
     const inc=[new THREE.Vector3(inX-8*si,8,0), new THREE.Vector3(inX,0,0)];
     world.add(ray(inc,c,.95));
-    if(a===null){                                     // NOT GUIDED — leak fan
+    if(a===null){                                     // NOT GUIDED, leak fan
       world.add(ray([new THREE.Vector3(inX,0,0),
         new THREE.Vector3(inX+4,-t-3,0)],c,.25));
       world.add(ray([new THREE.Vector3(inX,0,0),
@@ -330,12 +330,12 @@ function refresh(){
     row(`T (${pol}) @ θᵢ=${fi.toFixed(1)}°`, (100*Tf).toFixed(2)+"%", Tf===0?"bad":"")+
     row("T_TE / T_TM @ θᵢ", (100*Tte).toFixed(2)+"% / "+(100*Ttm).toFixed(2)+"%")+
     row("diattenuation (TE−TM)/(TE+TM)", ((Tte-Ttm)/(Tte+Ttm+1e-12)).toFixed(3))+
-    row("chromatic spread (in-guide)", isNaN(chrom)?"—":chrom.toFixed(1)+"°")+
+    row("chromatic spread (in-guide)", isNaN(chrom)?", ":chrom.toFixed(1)+"°")+
     row("full-RGB guided FOV window", `[${flo.toFixed(1)}°, ${fhi.toFixed(1)}°]`,
         (fhi-flo)>0?"good":"bad")+
     row("RGB guided @ θᵢ=0", guided.map((g,k)=>g?"✓":"✗").join(" "),
         guided.every(Boolean)?"good":"bad")+
-    row("TIR bounces (green)", a[1]===null?"—":
+    row("TIR bounces (green)", a[1]===null?", ":
         Math.min(Math.max(LPROP/(2*d.t*Math.tan(a[1])),1),60).toFixed(1));
 
   const rc=RCWA[String(d.rank)]||[];

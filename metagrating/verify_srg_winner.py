@@ -56,7 +56,7 @@ def main():
     print("    (does the 92% survive a smoother slant discretization?)")
     for nl in (6, 12, 24, 48):
         occ = occ_srg_nl(p["slant_deg"], p["duty"], p["depth_nm"], per, nl)
-        # NL sublayers of thickness H/NL — rebuild thicknesses accordingly
+        # NL sublayers of thickness H/NL, rebuild thicknesses accordingly
         import metagrating_model as mm
         old = mm.NL
         mm.NL = nl                     # solve_orders reads thickness from NL

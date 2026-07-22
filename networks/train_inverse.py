@@ -7,10 +7,10 @@ Loss is computed in SPEC space through a frozen decoder f:
 This sidesteps design non-uniqueness (one-to-many y->theta), the classic tandem trick.
 
 Two decoders, selected with --decoder:
-    surrogate  (default)  the TRAINED forward network from surrogate.py — the
+    surrogate  (default)  the TRAINED forward network from surrogate.py, the
                           standard tandem recipe of the cited literature; run
                           `python3 surrogate.py --pmma` first
-    physics               the exact differentiable physics engine — this
+    physics               the exact differentiable physics engine, this
                           project's ablation arm for the paper's comparison
 Validation is ALWAYS scored by the exact physics, whichever decoder trains.
 
@@ -132,7 +132,7 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
 
     if best_state is not None:
         model.load_state_dict(best_state)  # report/save the best epoch, not the
-        # last — restored BEFORE the final evaluation so the printed table and
+        # last, restored BEFORE the final evaluation so the printed table and
         # the saved checkpoint describe the SAME model (previously the printout
         # scored the last epoch while the checkpoint stored the best epoch)
 
@@ -161,7 +161,7 @@ def train(n_train=30000, n_val=3000, epochs=40, batch=512, lr=1e-3, quick=False,
                        steps_per_epoch * epochs, f"{best_va:.6f}"])
     print(f"Appended run summary -> {runs_csv}")
 
-    try:  # loss curve figure — visual record of the training run
+    try:  # loss curve figure, visual record of the training run
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
@@ -204,7 +204,7 @@ def demo_reverse_engineering(model):
     # gradient-probed ceiling of the v5 PMMA space is ~0.466), efficient-
     # for-class (T_FOM 1.1% vs ~1.35% ceiling), mid-range pupil walk-off
     # (floor ~1.52 mm in the guided window). NOTE: the target must be
-    # physically reachable — an unreachable request makes the demo look
+    # physically reachable, an unreachable request makes the demo look
     # like a network failure rather than an infeasible spec (lesson from
     # the v3-era 14-deg target).
     y_star = torch.tensor([[0.45, 0.011, 1.7, 0.010]])
