@@ -29,6 +29,7 @@ from paths import res_path
 from physics.waveguide_physics import (
     ENGINE_VERSION, SPEC_SCALE, forward_model, use_pmma, sample_theta, normalize_theta,
     denormalize_theta, tir_penalty, transmission_polarized, fov_window_deg,
+    transmission_rgb, colour_balance,
 )
 
 N_STARTS = 300     # random starting designs
@@ -82,11 +83,16 @@ def optimize():
     pol = transmission_polarized(theta, field_deg=FOV_DEG)
     fov_lo, fov_hi, fov_w = fov_window_deg(theta)
 
+    Trgb = transmission_rgb(theta)
+    cbal = colour_balance(theta)
+
     print("\n=== Top 5 optimal PMMA designs ===")
     for rank, i in enumerate(top, 1):
         mtf, T, ca, T_fov = y[i].tolist()
-        print(f"\n#{rank}  J={J[i]:.4f} | MTF {mtf:.4f} | T {100*T:.2f}% | "
-              f"walkoff {ca:.2f} mm | T@FOV {100*T_fov:.2f}%")
+        print(f"\n#{rank}  J={J[i]:.4f} | MTF {mtf:.4f} | T_white {100*T:.3f}% | "
+              f"walkoff {ca:.2f} mm | T_white@FOV {100*T_fov:.3f}%")
+        print(f"    per primary: B {100*Trgb[i,0]:.3f}%  G {100*Trgb[i,1]:.3f}%  "
+              f"R {100*Trgb[i,2]:.3f}%   colour balance {cbal[i]:.3f}")
         print(f"    at {FOV_DEG:.0f} deg field: T_TE {100*pol['TE'][i]:.2f}%  "
               f"T_TM {100*pol['TM'][i]:.2f}%  "
               f"diattenuation {pol['diattenuation'][i]:.3f}")
@@ -101,13 +107,18 @@ def optimize():
     # front-indexed readers) so every row self-identifies which physics engine
     # produced it, no file can silently be mistaken for a different engine's
     # results (the failure mode behind the stale unversioned pareto_results.csv).
-    header = (["rank", "J", "MTF", "T", "walkoff_mm", "T_fov",
+    # per-primary throughput and the colour balance travel with every record:
+    # the white-balanced number alone does not show WHICH channel is starving
+    header = (["rank", "J", "MTF", "T_white", "walkoff_mm", "T_white_fov",
+               "T_blue", "T_green", "T_red", "colour_balance",
                "T_TE_fov", "T_TM_fov", "fov_lo_deg", "fov_hi_deg"]
               + LABELS + ["engine"])
     out_rows = []
     for rank, i in enumerate(top, 1):
         out_rows.append([rank, f"{J[i]:.4f}"] +
                         [f"{v:.5g}" for v in y[i].tolist()] +
+                        [f"{v:.5g}" for v in Trgb[i].tolist()] +
+                        [f"{cbal[i]:.4f}"] +
                         [f"{pol['TE'][i]:.5g}", f"{pol['TM'][i]:.5g}",
                          f"{fov_lo[i]:.3f}", f"{fov_hi[i]:.3f}"] +
                         [f"{v:.5g}" for v in theta[i].tolist()] +

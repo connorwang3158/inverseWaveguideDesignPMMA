@@ -132,12 +132,17 @@ def v9_brewster():
     th_b = float(np.degrees(np.arctan(N_PMMA)))     # Brewster's angle
     T_tm = fresnel_T(n, th_b, "TM")
     err = abs(T_tm.item() - 1.0)                     # R_TM(th_B) = 0 -> T = 1
-    # unpolarized average identity at a 3-deg field angle
-    from waveguide_physics import use_pmma, sample_theta, transmission
+    # Unpolarized average identity at a 3-deg field angle, checked PER PRIMARY.
+    # The white-balanced number is a minimum over primaries, and a minimum does
+    # not commute with the TE/TM average, since the weakest primary under TE
+    # need not be the weakest under TM. The identity is a statement about power
+    # transmittances at one wavelength, so that is where it is tested.
+    from waveguide_physics import use_pmma, sample_theta, transmission_rgb
     torch.manual_seed(1)
     th = sample_theta(16)
-    lhs = transmission(th, 3.0, "unpol")
-    rhs = 0.5 * (transmission(th, 3.0, "TE") + transmission(th, 3.0, "TM"))
+    lhs = transmission_rgb(th, 3.0, "unpol")
+    rhs = 0.5 * (transmission_rgb(th, 3.0, "TE")
+                 + transmission_rgb(th, 3.0, "TM"))
     avg_err = (lhs - rhs).abs().max().item()
     # TE and TM must DIFFER at oblique incidence (equal at 0 deg by symmetry);
     # guards against a regression that silently makes the model pol-blind
@@ -187,6 +192,44 @@ def v11_walkoff_consistency():
           f"walk-off model")
 
 
+def v12_per_colour():
+    """The cascade must be wavelength-resolved, not green evaluated three
+    times. Three independent checks: the primaries must actually differ, the
+    white-balanced number must equal the worst primary, and pushing the field
+    angle past the edge of the full-colour window must kill red while green
+    survives. That last one is the physics a green-only cascade cannot see,
+    and it is what limits the field of view of a low-index guide."""
+    import torch
+    import waveguide_physics as wp
+    wp.use_pmma()
+    torch.manual_seed(3)
+    th = wp.sample_theta(64)
+    T = wp.transmission_rgb(th)                       # [64,3]
+    spread = (T.max(dim=1).values / (T.min(dim=1).values + 1e-30))
+    differ = bool((spread > 1.5).all())               # colours are not equal
+    white_ok = torch.allclose(wp.transmission(th), T.min(dim=1).values)
+    # At 5 deg the red order leaves the guiding window (x_R = sin(5 deg)
+    # + 635/period exceeds n_R = 1.4886) while green stays well inside.
+    th2 = th.clone()
+    th2[:, 5] = 446.0                                 # the record period
+    T5 = wp.transmission_rgb(th2, field_deg=5.0)
+    T0 = wp.transmission_rgb(th2, field_deg=0.0)
+    # The guiding mask is a sigmoid, so an evanescent order is suppressed by
+    # orders of magnitude rather than set exactly to zero; that soft tail is
+    # what keeps the optimizer's gradients alive. The strict statement is the
+    # unrelaxed audit, so both are checked: red is crushed relative to green,
+    # and the hard guided test rejects the design at that field angle.
+    red_crushed = bool((T5[:, 2] < 1e-2 * T5[:, 1]).all()
+                       and (T5[:, 1] > 0.1 * T0[:, 1]).all())
+    hard_rejects = bool((~wp.hard_guided_ok(th2, field_deg=5.0)).all())
+    check("V12 per-colour cascade",
+          differ and white_ok and red_crushed and hard_rejects,
+          f"primaries differ (max/min > 1.5) for 64/64: {differ}; "
+          f"white == worst primary: {white_ok}; red suppressed >100x vs green "
+          f"at 5 deg: {red_crushed}; hard guided audit rejects 5 deg: "
+          f"{hard_rejects}")
+
+
 def v7_gates():
     import io, contextlib
     from architectures import run_gates
@@ -204,6 +247,7 @@ if __name__ == "__main__":
     print("Independent validation (no Paper 1 references)\n" + "=" * 56)
     v1_fresnel(); v2_energy(); v3_symmetry(); v5_ceiling(); v6_convergence()
     v7_gates(); v8_tir(); v9_brewster(); v10_watson(); v11_walkoff_consistency()
+    v12_per_colour()
     v4_scalar_limit()   # slowest last (nG=81)
     n_ok = sum(ok for _, ok in results)
     print("=" * 56)

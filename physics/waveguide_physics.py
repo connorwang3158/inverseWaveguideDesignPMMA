@@ -7,6 +7,18 @@ the surrogate network. It follows the analytic model in
   Wang, "Modeling Diffractive Singular Flat AR Waveguide Optical Performance"
   (github.com/connorwang3158/ModelingSingularFlatDiffractiveWaveguidesWithinARGlasses)
 
+The cascade is wavelength-resolved. Every term is evaluated at each primary's
+own wavelength and its own material index: the grating equation, the guiding
+window, the in-guide angle, the bounce count, the Beer-Lambert path, the
+Debye-Waller roughness exponent, the Fresnel coefficients, and the RCWA
+coupling efficiency. Running the cascade at green and calling the answer
+full-colour hides the effect that dominates a low-index guide, since red sits
+closest to the edge of the guiding window and couples several times more
+weakly than blue. transmission_rgb() returns all three primaries;
+transmission() returns the white-balanced number, which is the worst primary,
+because a display that has to hit a white point can only use as much light as
+its weakest channel carries.
+
 Transmission is a product of dimensionless power fractions:
   a total-internal-reflection guiding mask, the in-coupler grating, bulk
   Beer-Lambert absorption over the zig-zag path, per-bounce roughness scatter
@@ -74,10 +86,11 @@ Design vector theta (8, physical units):
 
 Spec vector y (4):
   [0] system MTF at 40 cyc/mm (green-weighted, anchored to the Watson eye)
-  [1] double-coupler throughput, unpolarized (0 to 1); a relative ranking
-      metric, not a device efficiency
+  [1] white-balanced double-coupler throughput, unpolarized (0 to 1), meaning
+      the worst of the three primaries; a relative ranking metric, not a
+      device efficiency
   [2] within-band chromatic pupil walk-off, mm, photopically weighted
-  [3] transmission at the design field angle FOV_DEG (guiding-aware)
+  [3] white-balanced throughput at the design field angle FOV_DEG
 """
 
 import os
@@ -88,7 +101,7 @@ import torch
 # different versions of the physics never get pooled together. Bump it when a
 # change makes old numbers non-comparable; the surrogate checkpoints store a
 # probe of the current physics and refuse to load once it no longer matches.
-ENGINE_VERSION = "v5"
+ENGINE_VERSION = "v6"
 
 # Source spectral width per display primary (LED FWHM, nm). Sets the
 # within-band chromatic walk-off and the finite-bandwidth chromatic MTF.
@@ -150,9 +163,15 @@ RESID_DISP = 0.001            # residual dispersion fraction reaching the
                               #   d(sin th_out) = (lambda/period)(dP/P);
                               # nanoimprint period reproducibility of about
                               # 0.1% gives 0.001.
-ACCEPT_SIN = 0.35             # in-coupler angular acceptance width (sin space)
-                              # compare Zhao et al., Opt. Express 32, 12340
-                              # (2024)  # SYNC
+ACCEPT_SIN = 0.35             # in-coupler angular acceptance width (sin space).
+                              # No longer applied in the transmission cascade:
+                              # it was an uncalibrated Gaussian standing in for
+                              # a field-resolved coupling efficiency, and under
+                              # the per-primary cascade the guiding window
+                              # carries the field dependence with real physics
+                              # instead. Kept for the acceptance diagnostic
+                              # below and for comparison with the angular
+                              # acceptance of Zhao et al. 2024.
 FOV_DEG = 20.0                # design half-field angle for the FOV metric
                               # (use_pmma() lowers it, see the note there)
 TIR_SOFTNESS = 0.005          # sigmoid width of the guiding mask (sin space)
@@ -203,7 +222,13 @@ def use_pmma():
     would return an honest but uninformative 0 for every design."""
     global FOV_DEG, PMMA_MODE, _DISP_ACTIVE
     BOUNDS.copy_(PMMA_BOUNDS)
-    FOV_DEG = 5.0
+    # The full-colour guided window of an n = 1.49 single-layer guide is only
+    # about 4 deg wide and sits roughly in [-0.5, +3.8] deg. Evaluating the
+    # field metric at 5 deg puts red outside the window, so the metric would
+    # report a green-only number at an angle where the image is no longer full
+    # colour, and under the per-primary cascade it would collapse to zero for
+    # every design and carry no gradient. 3 deg sits inside the window.
+    FOV_DEG = 3.0
     PMMA_MODE = True
     _DISP_ACTIVE = True   # PMMA Sellmeier dispersion on
     _rcwa_grid()   # fail loudly now if the calibration grid is missing; a
@@ -270,6 +295,40 @@ def _axis_lerp(axis: torch.Tensor, q: torch.Tensor):
     idx = idx.clamp(1, len(axis) - 1)
     x0, x1 = axis[idx - 1], axis[idx]
     return idx - 1, (qc - x0) / (x1 - x0)
+
+
+def _interp_eta_rgb(grid, n, period, depth, duty,
+                    pol: str = "unpol") -> torch.Tensor:
+    """All three primaries at once, [B,3].
+
+    The interpolation weights over (n, period, depth, duty) do not depend on
+    wavelength, so they are computed once and applied to each of the three
+    wavelength slices. That makes the per-color cascade cost about the same as
+    the old green-only one instead of three times as much."""
+    tab = {"TE": grid["eta"][0], "TM": grid["eta"][1],
+           "unpol": grid["eta_unpol"]}[pol]                     # [W,N,P,D,U]
+    hn, fn = _axis_lerp(grid["ns"], n)
+    ip, fp = _axis_lerp(grid["periods"], period)
+    jd, fd = _axis_lerp(grid["depths"], depth)
+    ku, fu = _axis_lerp(grid["duties"], duty)
+    out = []
+    for w in range(3):
+        t_w = tab[w]
+        eta = torch.zeros_like(fp)
+        for dn, wn in ((0, 1 - fn), (1, fn)):
+            for dp, wp in ((0, 1 - fp), (1, fp)):
+                for dd, wd in ((0, 1 - fd), (1, fd)):
+                    for du, wu in ((0, 1 - fu), (1, fu)):
+                        eta = eta + (wn * wp * wd * wu
+                                     * t_w[hn + dn, ip + dp, jd + dd, ku + du])
+        out.append(eta)
+    return torch.stack(out, dim=1)                              # [B,3]
+
+
+def eta_rgb(n, period, depth, duty, pol: str = "unpol") -> torch.Tensor:
+    """RCWA-calibrated first-order coupling efficiency at all three primaries,
+    [B,3]. This is the vector-electromagnetic quantity the cascade runs on."""
+    return _interp_eta_rgb(_rcwa_grid(), n, period, depth, duty, pol)
 
 
 def _interp_eta(grid, n, period, depth, duty, wl_idx: int = 1,
@@ -512,14 +571,23 @@ def fresnel_T(n: torch.Tensor, field_deg: float, pol: str) -> torch.Tensor:
 
 def _transmission_pol(theta: torch.Tensor, field_deg: float,
                       pol: str) -> torch.Tensor:
-    """Single-polarization double-coupler throughput FOM (green-weighted).
+    """Single-polarization double-coupler throughput, resolved per primary.
+
+    Returns [B,3] for blue, green, and red. Every wavelength-dependent term is
+    evaluated at its own wavelength and its own material index: the grating
+    equation, the guiding window, the in-guide angle, the bounce count, the
+    Beer-Lambert path, the Debye-Waller roughness exponent, the Fresnel
+    coefficients, and the RCWA coupling efficiency. Evaluating the cascade at
+    green alone and calling the result full-color hides exactly the effect
+    that matters most here, since the red order sits closest to the edge of
+    the guiding window and couples several times more weakly than blue.
 
     This is a relative figure of merit for ranking designs at one eye
     position. It does not model exit-pupil expansion, so it is not a device
     efficiency.
 
-    Cascade (all terms dimensionless power fractions):
-      guided-mask x eta_in(angle) x Beer-Lambert x Tien-roughness
+    Cascade (all terms dimensionless power fractions, per primary):
+      guided-mask x eta_in x Beer-Lambert x Tien-roughness
       x re-interaction survival x eta_out
 
     The device has surface-relief couplers on the faces the light enters and
@@ -531,83 +599,136 @@ def _transmission_pol(theta: torch.Tensor, field_deg: float,
     by lossless TIR, with bulk absorption and roughness scatter carrying the
     losses.
 
-    Two approximations are worth stating: the RCWA grid is solved at normal
-    incidence, and the air->PMMA efficiency is reused for the PMMA->air
-    out-coupler by reciprocity. Both are small over the roughly 5 deg PMMA
-    field window, and the in-coupler's angular response is carried by the
-    ACCEPT_SIN acceptance factor.
+    One approximation is worth stating: the RCWA grid is solved at normal
+    incidence and reused across the field, so the angular dependence carried
+    here is the guiding window and the grating equation rather than a
+    field-resolved coupling efficiency. Over the few-degree guided window of a
+    low-index substrate that is a small effect, and the guiding window is the
+    term that actually decides the field edge.
     """
     n, alpha, sigma, Lc, t, period, depth, duty = theta.unbind(dim=1)
-    lam_g = 532.0  # green carries the transmission benchmark
 
-    # grating geometry at this field angle
-    x_g = grating_x(period, lam_g, field_deg)      # [B]
-    mask = guided_mask(x_g, n)                     # guiding window
-    ang = diffraction_angle(x_g, n)                # in-guide angle [B]
+    n_k = n_rgb(n)                                  # [B,3] per-primary index
+    t_k = t.unsqueeze(1)                            # [B,1] broadcast over color
+    lam_mm = (WL.to(theta.device) * 1e-6).unsqueeze(0)   # [1,3] mm
 
-    # bulk Beer-Lambert loss along the zig-zag propagation path
-    NB = n_bounces(t, ang)
-    path_mm = NB * t / torch.cos(ang)
-    T_bulk = torch.exp(-alpha * path_mm)
+    # grating geometry at this field angle, per primary
+    x = grating_x(period, WL, field_deg)            # [B,3]
+    mask = guided_mask(x, n_k)                      # [B,3] guiding window
+    ang = diffraction_angle(x, n_k)                 # [B,3] in-guide angle
+
+    # bulk Beer-Lambert loss along each primary's own zig-zag path
+    NB = n_bounces(t_k, ang)                        # [B,3]
+    path_mm = NB * t_k / torch.cos(ang)
+    T_bulk = torch.exp(-alpha.unsqueeze(1) * path_mm)
 
     # Roughness scatter per TIR bounce (Tien 1971, Appl. Opt. 10, 2395): a
     # specular loss per bounce of exp[-(4 pi sigma n cos(theta)/lambda)^2],
     # weighted by a Payne & Lacey (1994) correlation term S(Lc) in (0,1] where
     # a longer correlation length keeps more of the scattered lobe inside the
-    # guided beam.  # SYNC S(Lc)
-    lam_mm = lam_g * 1e-6
-    per_bounce = (4 * torch.pi * (sigma * 1e-6) * n * torch.cos(ang) / lam_mm) ** 2
-    S_corr = 1.0 / (1.0 + (Lc / 3e5))
+    # guided beam. Both the wavelength in the exponent and the bounce count are
+    # per primary, which is why a rough surface shifts the colour balance
+    # rather than just dimming the image.  # SYNC S(Lc)
+    per_bounce = (4 * torch.pi * (sigma.unsqueeze(1) * 1e-6) * n_k
+                  * torch.cos(ang) / lam_mm) ** 2
+    S_corr = (1.0 / (1.0 + (Lc / 3e5))).unsqueeze(1)
     T_scatter = torch.exp(-per_bounce * S_corr * NB)
 
-    # Grating coupling. eta_first_order() picks the branch: the rigorous
-    # RCWA-calibrated per-polarization efficiency in PMMA mode, or the scalar
-    # Goodman formula in the full space. The angular acceptance applies to the
-    # in-coupler only; the out-coupler sees the guided angle by construction.
-    eta = eta_first_order(n, period, depth, duty, wl_idx=1, pol=pol)
-    s_i = torch.sin(torch.deg2rad(torch.tensor(float(field_deg),
-                                               device=theta.device)))
-    accept = torch.exp(-(s_i / ACCEPT_SIN) ** 2)
+    # Grating coupling, rigorous and polarization-resolved at all three
+    # primaries. In the full-material space the calibration grid does not
+    # apply, so the scalar formula is evaluated per primary instead.
+    if PMMA_MODE:
+        eta = eta_rgb(n, period, depth, duty, pol=pol)          # [B,3]
+    else:
+        eta = torch.stack([eta_first_order(n, period, depth, duty,
+                                           wl_idx=k, pol=pol)
+                           for k in range(3)], dim=1)
 
     # Interface loss, which depends on the branch: the RCWA efficiency already
     # carries the corrugated-interface reflection, but the scalar Goodman
     # efficiency is a pure phase-grating term with no interface physics, so the
-    # full-material branch keeps the flat-interface factor and the PMMA branch
-    # does not.
-    T_iface = 1.0 if PMMA_MODE else fresnel_T(n, field_deg, pol) ** 2
+    # full-material branch keeps the flat-interface factor, evaluated at each
+    # primary's own index, and the PMMA branch does not.
+    T_iface = 1.0 if PMMA_MODE else fresnel_T(n_k, field_deg, pol) ** 2
 
     # In-coupler re-interaction. While the bounce advance 2 t tan(th_d) is
     # shorter than the in-coupler aperture W_IN_MM, the guided beam re-hits the
     # grating and each encounter re-diffracts a fraction of order eta back out
     # (the Zhao et al. 2024 mechanism, taken to first order with the same eta
-    # by reciprocity). The relu keeps the factor exactly 1 for thick guides
-    # whose first bounce already clears the coupler.
-    m_re = torch.relu(W_IN_MM / (2.0 * t * torch.tan(ang)) - 1.0)
+    # by reciprocity). Red advances fastest per bounce, so it re-crosses the
+    # coupler fewest times. The relu keeps the factor exactly 1 for thick
+    # guides whose first bounce already clears the coupler.
+    m_re = torch.relu(W_IN_MM / (2.0 * t_k * torch.tan(ang)) - 1.0)
     T_reint = (1.0 - eta.clamp(max=0.95)) ** m_re
 
-    T_grating = (eta * accept) * T_reint * eta     # in x survival x out
+    T_grating = eta * T_reint * eta                 # in x survival x out
 
     return mask * T_iface * T_bulk * T_scatter * T_grating
 
 
-def transmission(theta: torch.Tensor, field_deg: float = 0.0,
-                 pol: str = "unpol") -> torch.Tensor:
-    """Double-coupler throughput FOM (a relative ranking metric, not a device
-    efficiency, see _transmission_pol). pol in {'TE','TM','unpol'}.
-    Unpolarized is (T_TE + T_TM)/2, the average of the two power
-    transmissions."""
+def transmission_rgb(theta: torch.Tensor, field_deg: float = 0.0,
+                     pol: str = "unpol") -> torch.Tensor:
+    """Per-primary double-coupler throughput, [B,3] for blue, green, red.
+    pol in {'TE','TM','unpol'}; unpolarized is (T_TE + T_TM)/2, the average of
+    the two power transmissions."""
     if pol == "unpol":
         return 0.5 * (_transmission_pol(theta, field_deg, "TE")
                       + _transmission_pol(theta, field_deg, "TM"))
     return _transmission_pol(theta, field_deg, pol)
 
 
+def transmission(theta: torch.Tensor, field_deg: float = 0.0,
+                 pol: str = "unpol") -> torch.Tensor:
+    """White-balanced double-coupler throughput, [B]: the WORST primary.
+
+    A full-colour display has to hit a white point, so the usable throughput
+    of a fixed projector budget is set by the weakest channel; the stronger
+    channels are driven down to match it. Reporting green alone, or an average
+    over primaries, credits the design for light it cannot actually use, which
+    is what a green-only cascade did. Use transmission_rgb() for the
+    per-primary numbers and colour_balance() for how far apart they sit.
+
+    This remains a relative figure of merit for ranking designs at one eye
+    position, not a device efficiency."""
+    return transmission_rgb(theta, field_deg, pol).min(dim=1).values
+
+
+def transmission_photopic(theta: torch.Tensor, field_deg: float = 0.0,
+                          pol: str = "unpol") -> torch.Tensor:
+    """Photopically weighted mean over primaries, [B]. Defensible only for a
+    projector whose primary powers are provisioned to the same weights; state
+    the assumed powers if this is quoted. transmission() (worst primary) is
+    the conservative default."""
+    w = V_PHOTOPIC.to(theta.device).unsqueeze(0)
+    return (w * transmission_rgb(theta, field_deg, pol)).sum(dim=1)
+
+
+def colour_balance(theta: torch.Tensor, field_deg: float = 0.0,
+                   pol: str = "unpol") -> torch.Tensor:
+    """Ratio of the weakest to the strongest primary throughput, [B] in (0,1].
+    1.0 is a perfectly balanced white; small values mean the image is usable
+    only after throwing away most of the strong channels."""
+    T = transmission_rgb(theta, field_deg, pol)
+    return T.min(dim=1).values / (T.max(dim=1).values + 1e-12)
+
+
 def transmission_polarized(theta: torch.Tensor, field_deg: float = 0.0):
-    """Convenience: dict with TE, TM, unpol, and the TE/TM diattenuation."""
+    """Convenience: dict with per-primary and white-balanced TE, TM, unpol,
+    plus the TE/TM diattenuation of the white-balanced number.
+
+    Note that the white balance is a minimum over primaries and therefore does
+    not commute with the TE/TM average: the weakest primary under TE need not
+    be the weakest under TM. The unpolarized entry here is the min of the
+    per-primary unpolarized transmission, which is the physically meaningful
+    order of operations and matches transmission(). The (T_TE + T_TM)/2
+    identity holds per primary, on the _rgb entries."""
     te = _transmission_pol(theta, field_deg, "TE")
     tm = _transmission_pol(theta, field_deg, "TM")
-    return {"TE": te, "TM": tm, "unpol": 0.5 * (te + tm),
-            "diattenuation": (te - tm) / (te + tm + 1e-12)}
+    unpol_rgb = 0.5 * (te + tm)
+    te_w, tm_w = te.min(dim=1).values, tm.min(dim=1).values
+    return {"TE": te_w, "TM": tm_w, "unpol": unpol_rgb.min(dim=1).values,
+            "TE_rgb": te, "TM_rgb": tm, "unpol_rgb": unpol_rgb,
+            "diattenuation": (te_w - tm_w) / (te_w + tm_w + 1e-12)}
 
 
 # ----------------------------------------------------------------------------
@@ -756,7 +877,9 @@ def mtf_system(theta: torch.Tensor) -> torch.Tensor:
 
 def forward_model(theta: torch.Tensor) -> torch.Tensor:
     """theta [B,8] -> spec y [B,4]: [MTF, T_FOM, walkoff_mm, T_FOM_at_FOV].
-    Transmissions are unpolarized; use transmission_polarized() for TE/TM."""
+    Transmissions are unpolarized and white-balanced, meaning the worst
+    primary; use transmission_rgb() for the per-primary numbers and
+    transmission_polarized() for TE/TM."""
     return torch.stack([
         mtf_system(theta),
         transmission(theta, field_deg=0.0),
@@ -791,6 +914,14 @@ if __name__ == "__main__":
     print(f"Watson eye MTF @40cyc/mm, 3mm pupil: {m_eye.item():.4f} "
           "(diffraction limit would be 0.847)")
     assert 0.40 < m_eye.item() < 0.60, "Watson term out of expected range"
+    # per-primary throughput: the spread across colours is the whole point of
+    # the wavelength-resolved cascade
+    Trgb = transmission_rgb(th)
+    print("T per primary (B,G,R):")
+    for row, bal in zip(Trgb.tolist(), colour_balance(th).tolist()):
+        print(f"   B {row[0]:.5f}  G {row[1]:.5f}  R {row[2]:.5f}   "
+              f"worst/best = {bal:.3f}")
+    print("T white-balanced (worst primary):", transmission(th).tolist())
     pol = transmission_polarized(th)
     print("T_TE:", pol["TE"].tolist())
     print("T_TM:", pol["TM"].tolist())

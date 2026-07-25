@@ -187,7 +187,7 @@ def evaluate(model, y_true, y_true_n, quiet=False):
     mse = nn.functional.mse_loss(normalize_spec(y_hat), y_true_n).item()
     if quiet:
         return mse
-    names = ["MTF@40cyc/mm", "T_FOM", "PupilWalkoff(mm)", "T@FOV"]
+    names = ["MTF@40cyc/mm", "T_white", "PupilWalkoff(mm)", "T_white@FOV"]
     mae = (y_hat - y_true).abs().mean(dim=0)
     rel = ((y_hat - y_true).abs() / (y_true.abs() + 1e-8)).median(dim=0).values
     for nm, a, r in zip(names, mae, rel):
