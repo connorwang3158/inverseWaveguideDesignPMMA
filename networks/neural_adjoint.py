@@ -55,7 +55,7 @@ W_TIR = 10.0   # TIR-feasibility penalty weight, same as optimize_pmma,
 
 LABELS = ["n", "alpha(1/mm)", "sigma(nm)", "Lc(nm)", "t(mm)",
           "period(nm)", "depth(nm)", "duty"]
-SPEC_NAMES = ["MTF", "T", "walkoff(mm)", "T@FOV"]
+SPEC_NAMES = ["MTF", "T_white", "walkoff(mm)", "T_white@FOV"]
 C_TRAIN, C_VAL, C_SURR, C_REF = "#2a78d6", "#1baf7a", "#eda100", "#e34948"
 C_VIOLET, C_IDENT = "#4a3aa7", "#8a8f98"
 

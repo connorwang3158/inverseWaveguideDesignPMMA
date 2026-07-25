@@ -53,7 +53,7 @@ TRAIN_SEED_BASE = 1000
 # fixed-size comparison set for the "best checkpoint ever" decision (see train)
 CMP_SEED, CMP_N = 200, 5000
 
-SPEC_NAMES = ["MTF@40cyc/mm", "T_FOM", "PupilWalkoff(mm)", "T@FOV"]
+SPEC_NAMES = ["MTF@40cyc/mm", "T_white", "PupilWalkoff(mm)", "T_white@FOV"]
 
 # figure palette (validated colorblind-safe set, fixed assignment everywhere)
 C_TRAIN, C_VAL, C_SURR, C_REF = "#2a78d6", "#1baf7a", "#eda100", "#e34948"
