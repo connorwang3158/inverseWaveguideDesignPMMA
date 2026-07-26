@@ -888,10 +888,21 @@ def forward_model(theta: torch.Tensor) -> torch.Tensor:
     ], dim=1)
 
 
-# Spec normalization scales, to keep the losses balanced across metrics.
+# Spec normalization scales, to keep the losses balanced across metrics and to
+# set the relative weight of each term in the design objective.
+#
+# Indices 1 and 3 are throughput. The 0.10 used before the cascade became
+# wavelength-resolved was sized for the old green-only number, which was about
+# a hundred times larger than the white-balanced one. Left at 0.10 the
+# throughput term contributed under 1% of the objective, so the search was
+# effectively blind to it and drifted on MTF and walk-off alone. The
+# white-balanced throughput has a median of 2.8e-4 and a ceiling near 1.4e-3
+# over the guided design space, so 1e-3 puts a good design at order unity,
+# comparable to the MTF term.
+#
 # Index 2 is the walk-off in mm scaled by the eye-pupil diameter, so
 # walkoff/PUPIL is the fraction of the pupil lost to chromatic vignetting.
-SPEC_SCALE = torch.tensor([1.0, 0.10, PUPIL_MM, 0.10])
+SPEC_SCALE = torch.tensor([1.0, 1e-3, PUPIL_MM, 1e-3])
 
 
 def normalize_spec(y: torch.Tensor) -> torch.Tensor:
